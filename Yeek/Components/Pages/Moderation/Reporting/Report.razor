@@ -1,0 +1,128 @@
+﻿@page "/moderation/report/{ticketId:int}"
+
+@using System.Globalization
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Core.Types
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@attribute [Authorize]
+
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+@if (_ticket == null)
+{
+    <p class="error-text">Ticket not found (are you logged in?)</p>
+    return;
+}
+
+<h3>Report: @_ticket.Header</h3>
+<PageTitle>Yeek - Reporting: @_ticket.Header</PageTitle>
+
+<div class="report-messages">
+    @foreach (var message in _messages)
+    {
+        <div class="report-message">
+            <p class="message">@message.Content</p>
+            <small>By: @message.SentBy!.DisplayName at @message.TimeSent.ToString("D", CultureInfo.InvariantCulture)</small>
+        </div>
+    }
+</div>
+
+<div class="report-send-message">
+    @if (!_ticket.Resolved || User!.TrustLevel >= TrustLevel.Moderator)
+    {
+        <form id="replyform" method="POST" enctype="multipart/form-data" action="/moderation/report/@_ticket.Id">
+            @{
+                var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+                <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken"/>
+            }
+
+            <label for="content">Reply:</label><br/>
+            <textarea required id="content" name="content" cols="40" rows="5"></textarea>
+            <small>Include as much detail as possible.</small>
+            <input type="submit" value="Send Reply"/>
+        </form>
+    }
+    @if (_ticket.Resolved)
+    {
+        <p class="errornt-text" style="margin-bottom: 20px">This ticket is resolved. No more replies can be made.</p>
+    }
+
+    @if (User!.TrustLevel >= TrustLevel.Moderator)
+    {
+        <form id="actionform" method="POST" enctype="multipart/form-data" action="/moderation/report/@_ticket.Id/status">
+            @{
+                var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+                <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken"/>
+            }
+
+            <label for="ticketstatus">Report Status:</label>
+            <select id="ticketstatus" name="ticketstatus" required>
+                <option name="resolved" value="0">Resolved</option>
+                <option name="open" value="1">Open</option>
+            </select>
+
+            <input type="submit" value="Save"/>
+            <small>Clicking save will reload the page.</small>
+        </form>
+
+        <strong>Quick Links</strong>
+        <div class="quick-links">
+            @{
+                var quickLinks = RegexCollection.GetQuickLinksForItem(_ticket);
+
+                foreach (var link in quickLinks)
+                {
+                    <a href="@link.href">@link.name</a>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int TicketId { get; set; }
+
+    private Ticket? _ticket;
+    private List<TicketMessage> _messages = [];
+
+    [Inject]
+    private IModerationRepository ModerationRepository { get; set; } = null!;
+
+    [CascadingParameter]
+    private User? User { get; set; } = null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null)
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 401;
+            return;
+        }
+
+        _ticket = await ModerationRepository.GetTicketOrNullAsync(TicketId);
+        if (_ticket == null)
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        // Access check!
+        // We need to either be a moderator OR the person who made the ticket to view this report.
+        if (User.TrustLevel < TrustLevel.Moderator && _ticket.ReporteeId != User.Id)
+        {
+            _ticket = null;
+            // Respond with 404 so as to not leak that this is an existing ticket.
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _messages = await ModerationRepository.GetMessagesForTicketAsync(TicketId);
+        HttpContextAccessor.HttpContext!.Response.StatusCode = 200;
+    }
+}

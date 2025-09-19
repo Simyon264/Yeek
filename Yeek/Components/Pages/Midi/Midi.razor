@@ -1,0 +1,208 @@
+﻿@page "/{Guid:guid}"
+@using System.Text.Encodings.Web
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@inject IHttpContextAccessor HttpContext
+
+@if (_file == null || _uploadedBy == null)
+{
+    <p class="error-text">File not found.</p>
+    return;
+}
+
+<PageTitle>Yeek - @_file.MostRecentRevision.TrackName</PageTitle>
+
+<h4>@_file.MostRecentRevision.TrackName</h4>
+
+<div class="midi-page-info">
+    <p><strong>Author: </strong>@_file.MostRecentRevision.ArtistName</p>
+    <p><strong>Album: </strong>@_file.MostRecentRevision.AlbumName</p>
+    <div class="midi-page-ratings">
+        @{
+            var classList = "rating";
+            classList += _file.Rating switch
+            {
+                > 0 => " good",
+                < 0 => " bad",
+                _ => " neutral"
+            };
+            <p><strong>Score:</strong> <span class="@classList" id="rating"> @_file.Rating</span></p>
+        }
+        @if(User is not null)
+        {
+            switch (_userScore)
+            {
+                case > 0:
+                    <button id="rateup" onclick="rate(1)" class="voted" up>↑</button>
+                    <button id="ratedown" onclick="rate(-1)" down>↓</button>
+                    break;
+                case < 0:
+                    <button id="rateup" onclick="rate(1)" up>↑</button>
+                    <button id="ratedown" onclick="rate(-1)" class="voted" down>↓</button>
+                    break;
+
+                default:
+                    <button id="rateup" onclick="rate(1)" up>↑</button>
+                    <button id="ratedown" onclick="rate(-1)" down>↓</button>
+                    break;
+            }
+        }
+        else
+        {
+            <button disabled title="You need to be logged in to vote.">↑</button>
+            <button disabled title="You need to be logged in to vote.">↓</button>
+        }
+    </div>
+
+    <p class="midi-page-description">
+        @_file.MostRecentRevision.Description
+    </p>
+    <p class="midi-page-uploaded-by">
+        Uploaded by: @_uploadedBy.DisplayName
+    </p>
+</div>
+
+<a class="midi-page-download" href="/download/@_file.Id" target="_blank">Download</a>
+<a href="/@_file.Id/edit">Edit</a>
+<a href="/@_file.Id/history">History</a>
+<a class="report-button" href="/moderation/report/new?topic=midi-@HtmlEncoder.Default.Encode($"{_file.Id}-rev-{_file.MostRecentRevision.RevisionId}")" target="_blank">Report content</a>
+
+<script defer>
+    const fileId = "@_file.Id";
+    let currentVote = @_userScore;
+    let currentScore = parseInt(document.getElementById("rating").innerText); // initial score
+
+    async function rate(score) {
+        const up = document.getElementById("rateup");
+        const down = document.getElementById("ratedown");
+
+        let newScore = score;
+
+        if (currentVote === score) {
+            newScore = 0;
+        }
+
+        // Predictive UI update
+        if (newScore === 1) {
+            up.classList.add("voted");
+            down.classList.remove("voted");
+        } else if (newScore === -1) {
+            down.classList.add("voted");
+            up.classList.remove("voted");
+        } else {
+            // reset both
+            up.classList.remove("voted");
+            down.classList.remove("voted");
+        }
+
+        const predictedScore = currentScore - currentVote + newScore;
+        updateScoreUI(predictedScore);
+
+        try {
+            const response = await fetch(`/vote?score=${newScore}&file=${fileId}`, {
+                method: "PATCH",
+                headers: { "Accept": "application/json" }
+            });
+
+            if (!response.ok) {
+                console.error("Vote failed", response.status);
+                // rollback to previous state
+                applyVoteUI(currentVote);
+                updateScoreUI(currentScore);
+            } else {
+                // success: commit changes
+                currentVote = newScore;
+                currentScore = predictedScore;
+            }
+        } catch (err) {
+            console.error("Error sending vote:", err);
+            // rollback to previous state
+            applyVoteUI(currentVote);
+            updateScoreUI(currentScore);
+        }
+    }
+
+    function applyVoteUI(score) {
+        const upBtn = document.getElementById("rateup");
+        const downBtn = document.getElementById("ratedown");
+
+        if (score === 1) {
+            upBtn.classList.add("voted");
+            downBtn.classList.remove("voted");
+        } else if (score === -1) {
+            downBtn.classList.add("voted");
+            upBtn.classList.remove("voted");
+        } else {
+            upBtn.classList.remove("voted");
+            downBtn.classList.remove("voted");
+        }
+    }
+
+    function updateScoreUI(score) {
+        const ratingEl = document.getElementById("rating");
+        ratingEl.innerText = score;
+
+        ratingEl.className = "rating"; // reset classes
+        if (score > 0) {
+            ratingEl.classList.add("good");
+        } else if (score < 0) {
+            ratingEl.classList.add("bad");
+        } else {
+            ratingEl.classList.add("neutral");
+        }
+    }
+</script>
+
+@code {
+    [Parameter]
+    public Guid Guid { get; set; }
+
+    [Inject] private IFileRepository FileRepository { get; set; } = null!;
+    [Inject] private IUserRepository UserRepository { get; set; } = null!;
+
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    private UploadedFile? _file = null;
+    private int _userScore = 0;
+    private User _uploadedBy = null!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var fileIsReal = await FileRepository.FileExistsAsync(Guid);
+        if (!fileIsReal)
+        {
+            HttpContext.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _file = await FileRepository.GetUploadedFileAsync(Guid);
+        _uploadedBy = await UserRepository.GetUserAsync(_file.UploadedById)!;
+
+        if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description))
+        {
+            _file.MostRecentRevision.Description = "No description provided.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+        {
+            _file.MostRecentRevision.ArtistName = "No artist";
+        }
+
+        if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
+        {
+            _file.MostRecentRevision.AlbumName = "No album";
+        }
+
+        if (User is not null)
+        {
+            var userScore = await FileRepository.GetRatingForUserForFileAsync(Guid, User.Id);
+            _userScore = userScore ?? 0;
+        }
+
+        HttpContext.HttpContext!.Response.StatusCode = 200;
+    }
+}

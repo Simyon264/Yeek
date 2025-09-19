@@ -1,0 +1,160 @@
+﻿@page "/{Guid:guid}/edit"
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.FileHosting.Model
+@using Yeek.Security.Model
+
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Repositories
+
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+@attribute [Authorize]
+
+<PageTitle>Yeek - MIDI Sharing</PageTitle>
+
+@if (_file == null)
+{
+    <p class="error-text">File not found.</p>
+    return;
+}
+
+<h1>Editing @_file.MostRecentRevision.TrackName</h1>
+
+<p>Please follow proper etiquette, this site is meant to be a neat sharing platform. Don't start edit wars.<br/>For more info, see the FAQ for how things should be labelled.</p>
+
+<div class="upload-container">
+    <p>Fields marked with a * are required.</p>
+
+    <form id="form" method="POST" enctype="multipart/form-data">
+        @{
+            var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+            <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+            <input name="id" type="hidden" value="@_file.Id" />
+        }
+
+        <div class="basic-info">
+            <label for="trackname" class="required">Trackname:</label>
+            <br/>
+            <input placeholder="Sunburn" type="text" name="trackname" id="trackname" maxlength="200" value="@_file.MostRecentRevision.TrackName"/>
+            <br/>
+            <label for="albumname">Album:</label>
+            <br/>
+            <input placeholder="zero_one" type="text" name="albumname" id="albumname" maxlength="200" value="@_file.MostRecentRevision.AlbumName"/>
+            <br/>
+            <label for="authorname">Author:</label>
+            <br/>
+            <input placeholder="The Living Tombstone" type="text" name="authorname" id="authorname" maxlength="200" value="@_file.MostRecentRevision.ArtistName"/>
+        </div>
+
+        <div class="basic-info">
+            <label for="description">Description:</label><br/>
+            <textarea maxlength="4000" id="description" name="description" cols="40" rows="5" placeholder="Part of the best album TLT ever made.">@_file.MostRecentRevision.Description</textarea>
+            <small>This field is not required, but is included in searches.</small>
+        </div>
+
+        <div class="basic-info">
+            <label class="required" for="changesummary">Change Summary:</label><br/>
+            <textarea maxlength="400" id="changesummary" name="changesummary" cols="40" rows="5" placeholder="Re-named track to be all uppercase."></textarea>
+            <small>Summarize what you changed.</small>
+        </div>
+    </form>
+
+
+    <button class="upload-button" onclick="save()">Save</button>
+    <p class="error-text hidden" id="error-text"></p>
+    <p class="errornt-text hidden" id="result-text"></p>
+</div>
+
+<script>
+    async function save() {
+        const form = document.getElementById('form');
+        const formData = new FormData(form);
+
+        const id = formData.get("id");
+
+        // Clear previous error
+        document.getElementById('error-text').classList.add('hidden');
+        showResult("Please wait...");
+
+        try {
+            const result = await fetch("/upload/midi", {
+                body: formData,
+                method: "PATCH",
+            });
+
+            if (!result.ok) {
+                // Try to parse as JSON (for validation errors)
+                const contentType = result.headers.get("content-type");
+
+                if (contentType && contentType.includes("application/problem+json")) {
+                    const data = await result.json();
+
+                    if (data.errors) {
+                        // Flatten into readable messages
+                        const messages = [];
+                        for (const [field, errs] of Object.entries(data.errors)) {
+                            errs.forEach(err => messages.push(`${err}`));
+                        }
+
+                        showError(messages.join("<br>"));
+                        return;
+                    }
+                }
+
+                // Fallback: plain text error
+                const text = await result.text();
+                showError("Failed to save, please try again.");
+                console.error(text);
+                return;
+            }
+
+            location.href = `/${id}`;
+            showResult("Uploaded!");
+        } catch (err) {
+            console.error(err);
+            showError("An unexpected error occurred. Please try again.");
+        }
+    }
+
+    function showError(error) {
+        const errorElem = document.getElementById('error-text');
+        errorElem.innerHTML = error;
+        errorElem.classList.remove('hidden');
+        document.getElementById('result-text').classList.add('hidden');
+    }
+
+    function showResult(result) {
+        const element = document.getElementById("result-text");
+
+        element.innerHTML = result;
+        element.classList.remove('hidden');
+    }
+</script>
+
+@code {
+    [Parameter]
+    public Guid Guid { get; set; }
+
+    [Inject] private IFileRepository FileRepository { get; set; } = null!;
+    [Inject] private IUserRepository UserRepository { get; set; } = null!;
+
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    private UploadedFile? _file = null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var fileIsReal = await FileRepository.FileExistsAsync(Guid);
+        if (!fileIsReal)
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _file = await FileRepository.GetUploadedFileAsync(Guid);
+        HttpContextAccessor.HttpContext!.Response.StatusCode = 200;
+    }
+}

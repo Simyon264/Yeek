@@ -1,0 +1,148 @@
+﻿@page "/moderation/users/{userId:guid}"
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.FileHosting.Model
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IAntiforgery Antiforgery
+
+@attribute [Authorize]
+
+<PageTitle>Yeek - Mod: User</PageTitle>
+
+@if (User == null || User.TrustLevel < TrustLevel.Moderator)
+{
+    <p class="error-text">Not enough permissions to view this content. Nerd</p>
+    return;
+}
+
+@if (_lookedAtUser == null)
+{
+    <h3>User Overview: Not Found</h3>
+    <p class="error-text">User not found.</p>
+    return;
+}
+
+<h3>User Overview: @_lookedAtUser.DisplayName</h3>
+
+<div class="user-overview">
+    <div class="user-basic-info">
+        <p>Trust Level: @_lookedAtUser.TrustLevel</p>
+        <p>Last login: @_lookedAtUser.LastLogin.ToString("F", CultureInfo.InvariantCulture)</p>
+    </div>
+
+    <form action="/moderation/users/@UserId/trust" method="POST" enctype="multipart/form-data" onsubmit="convertBanDateToUtc(event)">
+        @{
+            var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+            <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+        }
+
+        <p>Change trust level</p>
+        <small>You can only set trust levels under you. For example if you are a moderator you can only promote to banned, normal and trusted.</small>
+        <select name="trustlevel" id="trustlevel" onchange="hideunhidebanlevel()">
+            <option value="-1" name="banned">Banned</option>
+            <option value="0" name="normal" selected>Normal</option>
+            <option value="1" name="trusted">Trusted</option>
+            <option value="2" name="moderator">Moderator</option>
+            <option value="3" name="admin">Admin</option>
+        </select>
+        <div class="hidden" id="banlevel">
+            <strong>Setting the trust level to banned will require more input. It will also create a note issued by you.</strong>
+            <label for="reason">Reason:</label><br/>
+            <textarea id="reason" name="reason" cols="40" rows="5"></textarea>
+            <br/>
+            <label for="expires">Expires at:</label>
+            <input type="datetime-local" id="expires-local" />
+            <input type="hidden" id="expires-utc" name="expires" />
+        </div>
+
+        <input type="submit" value="Save"/>
+    </form>
+
+    <div class="user-notes">
+        @if (_userNotes.Count == 0)
+        {
+            <p class="errornt-text">User has no notes.</p>
+        }
+        @foreach (var note in _userNotes)
+        {
+            <div class="user-note">
+                <p>@note.Content</p>
+                <small>Note made by: @note.CreatedByUser?.DisplayName on @note.CreatedAt.ToString("F", CultureInfo.InvariantCulture)</small>
+            </div>
+        }
+    </div>
+
+    <form id="newnoteform" action="/moderation/users/@UserId/note" method="POST" enctype="multipart/form-data">
+        @{
+            <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+        }
+
+        <label for="content">Content:</label><br/>
+        <textarea id="content" name="content" cols="40" rows="5"></textarea>
+        <small>This content of the note. Include as much detail as possible.</small>
+        <input type="submit" value="Add note"/>
+    </form>
+</div>
+
+<script defer>
+    const selectElement = document.getElementById("trustlevel");
+    const banform = document.getElementById("banlevel");
+
+    selectElement.addEventListener("change", (event) => {
+        const value = event.target.value;
+        if (value == "-1") {
+            banform.classList.remove("hidden");
+        } else {
+            banform.classList.add("hidden");
+        }
+    });
+
+    function convertBanDateToUtc(e) {
+        const localInput = document.getElementById("expires-local").value;
+        if (!localInput) return; // nothing to do
+
+        // Convert local datetime to UTC ISO string
+        const localDate = new Date(localInput);
+        const utcString = localDate.toISOString(); // 2025-09-18T10:00:00.000Z
+
+        document.getElementById("expires-utc").value = utcString;
+    }
+</script>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [Parameter]
+    public Guid UserId { get; set; }
+
+    private User? _lookedAtUser = null;
+    private List<UserNote> _userNotes = [];
+
+    [Inject] private IUserRepository UserRepository { get; set; } = null!;
+    [Inject] private IModerationRepository ModerationRepository { get; set; } = null!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null || User.TrustLevel < TrustLevel.Moderator)
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 401;
+            return;
+        }
+
+        if (!await UserRepository.UserExists(UserId))
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _lookedAtUser = await UserRepository.GetUserAsync(UserId);
+        _userNotes = await ModerationRepository.GetUserNotesAsync(UserId);
+        HttpContextAccessor.HttpContext!.Response.StatusCode = 200;
+    }
+}

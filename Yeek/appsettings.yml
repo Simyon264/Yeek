@@ -1,0 +1,22 @@
+Serilog:
+  Using: [ "Serilog.Sinks.Console"]
+  MinimumLevel:
+    Default: "Information"
+    Override:
+      SS14: "Information"
+      Microsoft: "Warning"
+      Microsoft.Hosting.Lifetime: "Information"
+      Microsoft.AspNetCore: "Warning"
+  WriteTo:
+    - Name: Console
+      Args:
+        RestrictedToMinimumLevel: Verbose
+        OutputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} {UserAgent:lj}{NewLine}{Exception}"
+    - Name: Console
+      Args:
+        RestrictedToMinimumLevel: Error
+        OutputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3} {SourceContext}] {Message:lj} {UserAgent:lj} - {TraceId} {NewLine}{Exception}"
+
+  Enrich: [ "FromLogContext" ]
+
+AllowedHosts: "*"

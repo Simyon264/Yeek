@@ -1,0 +1,65 @@
+﻿@page "/moderation/users"
+
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@inject IHttpContextAccessor HttpContext
+
+@attribute [Authorize]
+
+<h3>Users</h3>
+
+<PageTitle>Users Overview</PageTitle>
+
+@if (User == null || User.TrustLevel < TrustLevel.Moderator)
+{
+    <p class="error-text">Not enough permissions to view this content. Nerd</p>
+    return;
+}
+
+
+<table>
+    <tr>
+        <th>Name</th>
+        <th>Trust Level</th>
+        <th>GUID</th>
+        <th>Last Login</th>
+        <th>Actions</th>
+    </tr>
+    @foreach (var user in _users)
+    {
+        <tr>
+            <td>@user.DisplayName</td>
+            <td>@user.TrustLevel.ToString()</td>
+            <td>@user.Id</td>
+            <td>@user.LastLogin.ToString("F", CultureInfo.InvariantCulture)</td>
+            <td>
+                <a href="/moderation/users/@user.Id">Visit</a>
+            </td>
+        </tr>
+    }
+</table>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [Inject]
+    private IUserRepository UserRepository { get; set; } = null!;
+
+    private List<User> _users = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null || User.TrustLevel < TrustLevel.Moderator)
+        {
+            HttpContext.HttpContext!.Response.StatusCode = 403;
+            return;
+        }
+
+        _users = await UserRepository.GetAllUsersAsync();
+        HttpContext.HttpContext!.Response.StatusCode = 200;
+    }
+}

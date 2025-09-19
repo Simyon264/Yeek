@@ -1,0 +1,53 @@
+﻿@page "/moderation/report/new"
+
+@using System.Web
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+<h3>Create Report</h3>
+
+<PageTitle>Yeek - Reporting: New Report</PageTitle>
+
+<div class="upload-container">
+    <form id="form" action="/moderation/report/new" method="POST" enctype="multipart/form-data">
+        @{
+            var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+            <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+        }
+
+        <div class="basic-info">
+            <label for="header">Subject:</label>
+            <input required name="header" id="header" maxlength="400" value="@_preFilledHeaderValue"/>
+            <small>If this value is autofilled, don't change it.</small>
+            <br/>
+
+            <label for="description">Description:</label><br/>
+            <textarea required id="description" name="description" cols="40" rows="5"></textarea>
+            <small>Include as much detail as possible.</small>
+        </div>
+
+        <p>Clicking submit will create a ticket and re-direct you to that ticket.</p>
+
+        <input type="submit" value="Submit"/>
+    </form>
+</div>
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = null!;
+
+    private string _preFilledHeaderValue = string.Empty;
+
+    protected override Task OnParametersSetAsync()
+    {
+        var url = new Uri(NavigationManager.Uri);
+        var dict = HttpUtility.ParseQueryString(url.Query);
+
+        _preFilledHeaderValue = dict.Get("topic") ?? string.Empty;
+        return Task.CompletedTask;
+    }
+}

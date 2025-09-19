@@ -1,0 +1,2 @@
+﻿ALTER TABLE users
+    ADD COLUMN lastlogin TIMESTAMPTZ NOT NULL default '1970-01-01 00:00:00+00';

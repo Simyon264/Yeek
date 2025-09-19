@@ -1,7 +1,149 @@
 ﻿@page "/"
+@using System.Web
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Yeek - MIDI Sharing</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="search">
+    <h4>Search</h4>
+    <form id="mainsearch">
+        <input value="@_query" name="search" type="text" placeholder="Type in an artist, album or track name..."/>
+        <label for="sortby">Sort by:</label>
+        <select name="sortby" id="sortby">
+            @switch (_sortBy)
+            {
+                // There is a better way to do this. I don't care.
+                case "relevance":
+                default:
+                    <option value="relevance" selected>Relevance</option>
+                    <option value="top">Top Rated</option>
+                    <option value="recent">Most Recent</option>
+                    break;
 
-Welcome to your new app.
+                case "top":
+                    <option value="relevance">Relevance</option>
+                    <option value="top" selected>Top Rated</option>
+                    <option value="recent">Most Recent</option>
+                    break;
+
+                case "recent":
+                    <option value="relevance">Relevance</option>
+                    <option value="top">Top Rated</option>
+                    <option value="recent" selected>Most Recent</option>
+                    break;
+            }
+        </select>
+        <input type="submit" value="Search"/>
+    </form>
+</div>
+
+@if (string.IsNullOrWhiteSpace(_query))
+{
+    <p>Serving <span>@_totalCount</span> MIDIs to Space Stations around the Galaxy.<br/> Type in a keyword to get started.</p>
+}
+else if (_totalCount == 0)
+{
+    <p>No results found :(</p>
+    <small>Do you have a MIDI for this? Upload it!</small>
+}
+else
+{
+    <p>Found @_totalCount result(s).</p>
+}
+<div class="search-results">
+    @foreach (var uploadedFile in _results)
+    {
+        <MidiCard File="uploadedFile"/>
+    }
+</div>
+
+@if (_maxPages > 1)
+{
+    @if (_maxPages > 1)
+    {
+        <nav class="pagination">
+            <ul>
+                @* Previous button *@
+                <li class="@( _page == 0 ? "disabled" : "" )">
+                    @{
+                        var prevPage = Math.Max(0, _page - 1);
+                        var prevQuery = HttpUtility.ParseQueryString(string.Empty);
+                        if (!string.IsNullOrWhiteSpace(_query)) prevQuery["search"] = _query;
+                        prevQuery["sortby"] = _sortBy;
+                        prevQuery["page"] = prevPage.ToString();
+                    }
+                    <a href="/?@prevQuery" class="page-link">Previous</a>
+                </li>
+
+                @* Page numbers *@
+                @for (var i = 0; i < _maxPages; i++)
+                {
+                    var isCurrent = i == _page;
+                    var pageQuery = HttpUtility.ParseQueryString(string.Empty);
+                    if (!string.IsNullOrWhiteSpace(_query)) pageQuery["search"] = _query;
+                    pageQuery["sortby"] = _sortBy;
+                    pageQuery["page"] = i.ToString();
+                    <li class="@(isCurrent ? "current" : "")">
+                        <a href="/?@pageQuery" class="page-link">@(@i + 1)</a>
+                    </li>
+                }
+
+                @* Next button *@
+                <li class="@( _page >= _maxPages - 1 ? "disabled" : "" )">
+                    @{
+                        var nextPage = Math.Min(_maxPages - 1, _page + 1);
+                        var nextQuery = HttpUtility.ParseQueryString(string.Empty);
+                        if (!string.IsNullOrWhiteSpace(_query)) nextQuery["search"] = _query;
+                        nextQuery["sortby"] = _sortBy;
+                        nextQuery["page"] = nextPage.ToString();
+                    }
+                    <a href="/?@nextQuery" class="page-link">Next</a>
+                </li>
+            </ul>
+        </nav>
+    }
+}
+
+@code
+{
+    private List<UploadedFile> _results = [];
+    private int _page = 0;
+    private int _maxPages = 0;
+    private string? _query;
+
+    private int _totalCount;
+    private string _sortBy = "relevance";
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = null!;
+
+    [Inject]
+    private IFileRepository FileRepository { get; set; } = null!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var url = new Uri(NavigationManager.Uri);
+        var dict = HttpUtility.ParseQueryString(url.Query);
+
+        _query = dict.Get("search");
+        var page = dict.Get("page");
+        int.TryParse(page, out _page);
+        _sortBy = dict.Get("sortby") ?? _sortBy;
+
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _totalCount = await FileRepository.GetAllCountAsync();
+            _results = await FileRepository.GetRecentMidisAsync(4*6);
+        }
+        else
+        {
+            var sortByParsed = Enum.Parse<SearchMode>(_sortBy, true);
+
+            var searchResult = await FileRepository.SearchAsync(_query, sortByParsed, _page, 4*6); // max pages: 4 per row, 6 rows
+            _totalCount = searchResult.allCount;
+            _maxPages = searchResult.pageCount;
+            _results = searchResult.result;
+        }
+    }
+}

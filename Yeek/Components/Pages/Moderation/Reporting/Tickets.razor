@@ -1,0 +1,80 @@
+﻿@page "/moderation/reports"
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@attribute [Authorize]
+
+<h3>Tickets</h3>
+<PageTitle>Yeek - Reporting: Tickets</PageTitle>
+
+
+@if (_tickets.Count == 0)
+{
+    <p class="errornt-text">You have no open tickets.</p>
+    return;
+}
+
+
+<h4>Open Tickets</h4>
+<div class="ticket-container">
+    @{
+        var openTickets = _tickets.Where(x => !x.Resolved).ToList();
+    }
+    @foreach (var ticket in openTickets)
+    {
+        <div class="ticket">
+            <p>@ticket.Header</p>
+            <small>Created by @ticket.ReporteeId - @ticket.FirstMessageTime!.Value.ToString("D", CultureInfo.InvariantCulture)</small>
+            <a href="/moderation/report/@ticket.Id">Open Ticket</a>
+        </div>
+    }
+    @if (openTickets.Count == 0)
+    {
+        <p>No open tickets!</p>
+    }
+</div>
+
+<h4>Closed Tickets</h4>
+<div class="ticket-container">
+    @{
+        var closedTickets = _tickets.Where(x => x.Resolved).ToList();
+    }
+    @foreach (var ticket in closedTickets)
+    {
+        <div class="ticket">
+            <p>@ticket.Header</p>
+            <a href="/moderation/report/@ticket.Id">Open Ticket</a>
+        </div>
+    }
+    @if (closedTickets.Count == 0)
+    {
+        <p>No closed tickets!</p>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [Inject]
+    private IModerationRepository ModerationRepository { get; set; } = null!;
+
+    private List<Ticket> _tickets = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null)
+            return;
+
+        if (User.TrustLevel >= TrustLevel.Moderator)
+        {
+            _tickets = await ModerationRepository.GetAllTicketsBasicAsync(null);
+        }
+        else
+        {
+            _tickets = await ModerationRepository.GetAllTicketsBasicAsync(User.Id);
+        }
+    }
+}

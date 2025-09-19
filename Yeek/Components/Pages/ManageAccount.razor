@@ -1,0 +1,28 @@
+﻿@page "/manage"
+
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+
+@attribute [Authorize]
+
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+<h3>Manage Account</h3>
+
+<div class="manage-account-container">
+    <form id="form" method="POST" enctype="multipart/form-data" class="delete-account-form">
+        @{
+            var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+            <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+        }
+
+        <b>This action is irreversible. Your contributions will be still be saved under a ghost user. Your ratings will be lost.</b>
+
+        <input type="submit" value="Delete Account"/>
+    </form>
+</div>
+
+@code {
+
+}

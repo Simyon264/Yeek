@@ -1,0 +1,36 @@
+﻿@using Yeek.FileHosting.Model
+
+<a class="midi-card" href="/@File.Id">
+    <div class="midi-card-header">
+        <h4>@File.MostRecentRevision.TrackName</h4>
+    </div>
+
+    <div class="midi-card-body">
+        @if (!string.IsNullOrWhiteSpace(File.MostRecentRevision.ArtistName))
+        {
+            <p class="artist">@File.MostRecentRevision.ArtistName</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(File.MostRecentRevision.AlbumName))
+        {
+            <p class="album">Album: @File.MostRecentRevision.AlbumName</p>
+        }
+        @{
+            var classList = "rating";
+            classList += File.Rating switch
+            {
+                > 0 => " good",
+                < 0 => " bad",
+                _ => " neutral"
+            };
+            <p>Score: <span class="@classList">@File.Rating</span></p>
+        }
+    </div>
+    <div class="midi-card-footer">
+        <small>Uploaded on @File.UploadedOn.ToString("MMM dd, yyyy")</small>
+    </div>
+</a>
+
+@code {
+    [Parameter]
+    public required UploadedFile File { get; set; }
+}

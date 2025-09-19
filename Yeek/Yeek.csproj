@@ -7,4 +7,27 @@
         <NoDefaultLaunchSettingsFile>True</NoDefaultLaunchSettingsFile>
     </PropertyGroup>
 
+    <ItemGroup>
+        <EmbeddedResource Include="Database\Migrations\Script0001_Init.sql" />
+        <EmbeddedResource Include="Database\Migrations\Script0002_FileSizes.sql" />
+        <EmbeddedResource Include="Database\Migrations\Script0003_RevisionDescription.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0004_Moderation.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0005_UserLastLogin.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0006_UserNotesTime.sql"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Dapper" Version="2.1.66" />
+      <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
+      <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.8" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="9.0.8" />
+      <PackageReference Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
+      <PackageReference Include="Npgsql" Version="9.0.3" />
+      <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="data\uploads\" />
+    </ItemGroup>
+
 </Project>

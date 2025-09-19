@@ -1,0 +1,3 @@
+ALTER TABLE uploadedfiles
+    ADD COLUMN originalname VARCHAR(260) NOT NULL DEFAULT '',
+    ADD COLUMN filesize BIGINT NOT NULL DEFAULT 0;

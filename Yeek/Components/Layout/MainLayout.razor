@@ -1,9 +1,181 @@
-﻿@inherits LayoutComponentBase
+﻿@using System.Globalization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Yeek.Core.Models
+@using Yeek.Core.Repositories
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+@inherits LayoutComponentBase
 
-@Body
+<header class="header">
+    <a href="/">Yeek</a>
+    <nav class="links">
+        <div class="link-array">
+            <p class="link-header">Account</p>
+            @if (User == null)
+            {
+                <div class="link">
+                    <a href="/login">Login with SS14</a>
+                </div>
+            }
+            else
+            {
+                <div class="link">
+                    <p>Logged in as @User.DisplayName</p>
+                </div>
+                <div class="link">
+                    <a href="/manage">Manage Account</a>
+                </div>
+                <div class="link">
+                    <a href="/upload">Upload MIDI</a>
+                </div>
+                <div class="link">
+                    <a href="/logout">Logout?</a>
+                </div>
+            }
+        </div>
+        <div class="link-array">
+            <p class="link-header">About</p>
+            <div class="link">
+                <a href="/privacy">Privacy Policy</a>
+            </div>
+            <div class="link">
+                <a href="/about-me">Attributions & Contact</a>
+            </div>
+            <div class="link">
+                <a href="/faq">FAQ</a>
+            </div>
+        </div>
+        @if (User != null)
+        {
+            <div class="link-array">
+                <p class="link-header">Moderation & Help</p>
+                <div class="link">
+                    <a href="/moderation/reports">My Tickets</a>
+                </div>
+                <div class="link">
+                    <a href="/moderation/report/new">Create Ticket</a>
+                </div>
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+                @if (User.TrustLevel >= TrustLevel.Moderator)
+                {
+                    <div class="link">
+                        <a href="/moderation/users">MOD: User Overview</a>
+                    </div>
+                }
+                @if (User.TrustLevel >= TrustLevel.Admin)
+                {
+                    <div class="link">
+                        <a href="/admin/messages">ADMIN: Global Messages</a>
+                    </div>
+                }
+            </div>
+        }
+    </nav>
+</header>
+
+<main class="main">
+    <div class="content">
+        <CascadingValue Value="User" TValue="User">
+            @Body
+        </CascadingValue>
+    </div>
+    <div class="sidebar">
+        <small>Wanna take a chance?</small>
+        <div class="random-midis">
+            @foreach (var uploadedFile in _randomMidis)
+            {
+                <a class="random-midi" href="@uploadedFile.Id.ToString("D")">
+                    <strong>@uploadedFile.MostRecentRevision.TrackName</strong>
+                    @if (!string.IsNullOrWhiteSpace(uploadedFile.MostRecentRevision.ArtistName))
+                    {
+                        <p class="artist">@uploadedFile.MostRecentRevision.ArtistName</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(uploadedFile.MostRecentRevision.AlbumName))
+                    {
+                        <p class="album">Album: @uploadedFile.MostRecentRevision.AlbumName</p>
+                    }
+                    @{
+                        var classList = "rating";
+                        classList += uploadedFile.Rating switch
+                        {
+                            > 0 => " good",
+                            < 0 => " bad",
+                            _ => " neutral"
+                        };
+                        <p>Score: <span class="@classList">@uploadedFile.Rating</span></p>
+                    }
+                </a>
+            }
+        </div>
+        <small>Site Notifications</small>
+        <div class="notifications">
+            @if (_banExpire != null)
+            {
+                <div class="notification banned-notice">
+                    <h3>Your Account is banned.</h3>
+                    <p>You are banned until @_banExpire.Value.ToString("F", CultureInfo.InvariantCulture)</p>
+                    @if (DateTime.UtcNow > _banExpire.Value)
+                    {
+                        <strong>This ban has expired. To remove it, create a ticket and appeal.</strong>
+                    }
+                </div>
+            }
+
+            @foreach (var globalMessage in _globalMessages)
+            {
+                <div class="notification">
+                    <h4>@globalMessage.Header</h4>
+                    <p>@globalMessage.Content</p>
+                </div>
+            }
+        </div>
+    </div>
+</main>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    [Inject]
+    private IUserRepository UserRepository { get; set; } = null!;
+
+    [Inject]
+    private IModerationRepository ModerationRepository { get; set; } = null!;
+
+    [Inject]
+    private IAdminRepository AdminRepository { get; set; } = null!;
+
+    [Inject]
+    private IFileRepository FileRepository { get; set; } = null!;
+
+    private User? User { get; set; } = null;
+    private DateTime? _banExpire = null;
+    private List<GlobalMessage> _globalMessages = [];
+    private List<UploadedFile> _randomMidis = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _globalMessages = await AdminRepository.GetAllActiveMessagesAsync();
+        _randomMidis = await FileRepository.GetRandomMidis();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationState == null || User != null)
+            return;
+
+        await AuthenticationState;
+        var userId = AuthenticationState.Result.User.Claims.GetUserId();
+        if (!userId.HasValue)
+            return;
+
+        User = await UserRepository.GetUserAsync(userId.Value);
+        if (User.TrustLevel == TrustLevel.Banned)
+        {
+            _banExpire = await ModerationRepository.GetLatestBanExpireOrNullForUserAsync(userId.Value);
+        }
+    }
+}

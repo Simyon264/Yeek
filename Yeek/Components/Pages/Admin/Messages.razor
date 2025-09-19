@@ -1,0 +1,79 @@
+﻿@page "/admin/messages"
+
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Core.Models
+@using Yeek.Core.Repositories
+@using Yeek.Security.Model
+
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IAntiforgery Antiforgery
+
+@attribute [Authorize]
+
+<PageTitle>Yeek - Admin: Global Messages</PageTitle>
+
+@if (User == null || User.TrustLevel < TrustLevel.Admin)
+{
+    <p class="error-text">Not enough permissions to view this content. Nerd</p>
+    return;
+}
+
+<h3>Site Notifications</h3>
+
+<form class="hidden">
+    @{
+        var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+        <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+    }
+</form>
+
+<table>
+    <tr>
+        <th>Id</th>
+        <th>Header</th>
+        <th>Content</th>
+        <th>Show</th>
+        <th>Actions</th>
+    </tr>
+    @foreach (var message in _messages)
+    {
+        <tr>
+            <td>@message.Id</td>
+            <td>@message.Header</td>
+            <td>@message.Content</td>
+            <td>@message.Show</td>
+            <td>
+                <button>Toggle Shown</button>
+                <button>Edit Header</button>
+                <button>Edit Content</button>
+            </td>
+        </tr>
+    }
+</table>
+
+<form>
+
+</form>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [Inject]
+    private IAdminRepository AdminRepository { get; set; } = null!;
+
+    private List<GlobalMessage> _messages = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null || User.TrustLevel < TrustLevel.Moderator)
+        {
+            HttpContextAccessor.HttpContext!.Response.StatusCode = 403;
+            return;
+        }
+
+        _messages = await AdminRepository.GetAllActiveMessagesAsync();
+        HttpContextAccessor.HttpContext!.Response.StatusCode = 200;
+    }
+}
