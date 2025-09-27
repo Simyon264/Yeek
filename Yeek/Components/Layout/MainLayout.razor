@@ -1,5 +1,7 @@
 ﻿@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Options
+@using Yeek.Configuration
 @using Yeek.Core.Models
 @using Yeek.Core.Repositories
 @using Yeek.FileHosting.Model
@@ -135,6 +137,11 @@
     </div>
 </main>
 
+@if (!string.IsNullOrEmpty(ServerConfiguration.Value.PlausibleSnippet))
+{
+    @((MarkupString)ServerConfiguration.Value.PlausibleSnippet)
+}
+
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -150,6 +157,9 @@
 
     [Inject]
     private IFileRepository FileRepository { get; set; } = null!;
+
+    [Inject]
+    private IOptions<ServerConfiguration> ServerConfiguration { get; set; } = null!;
 
     private User? User { get; set; } = null;
     private DateTime? _banExpire = null;

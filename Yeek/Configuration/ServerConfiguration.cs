@@ -28,4 +28,6 @@ public class ServerConfiguration
     /// Add a slash before the path: "/path"
     /// </remarks>
     public string? PathBase { get; set; }
+
+    public string? PlausibleSnippet { get; set; } = null;
 }
