@@ -89,6 +89,11 @@ builder.Services.AddTickerQ(opt =>
 
 builder.Services.AddControllers();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.All;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -99,7 +104,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (serverConfiguration.UseHttps)
+    app.UseHttpsRedirection();
+
+if (serverConfiguration.UseForwardedHeaders)
+    app.UseForwardedHeaders();
+
 app.UseSerilogRequestLogging(o =>
 {
     o.GetLevel = HttpContextExtension.GetRequestLogLevel;
