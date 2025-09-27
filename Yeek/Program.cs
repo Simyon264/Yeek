@@ -85,6 +85,7 @@ builder.Services.AddHostedService<WebDavBackgroundWorker>();
 builder.Services.AddTickerQ(opt =>
 {
     opt.SetMaxConcurrency(2);
+    opt.SetExceptionHandler<TickerExceptionHandler>();
 });
 
 builder.Services.AddControllers();
