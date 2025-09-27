@@ -32,6 +32,10 @@ public interface IFileRepository
 
     public Task<Guid[]> GetAllIdsAsync();
     Task EditFileAsync(Guid fileId, FileRevision fileRevision);
+
+    public Task<FilePreview?> GetFilePreviewOrNullAsync(Guid fileId);
+    public Task AddFilePreviewAsync(Guid fileId, FilePreview preview);
+    public Task<Guid[]> GetMissingPreviews();
 }
 
 public enum SearchMode

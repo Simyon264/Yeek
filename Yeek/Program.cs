@@ -1,8 +1,10 @@
-using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
+using TickerQ.DependencyInjection;
+using TickerQ.Utilities.Enums;
 using Yeek.Components;
 using Yeek.Configuration;
+using Yeek.Core;
 using Yeek.Core.Repositories;
 using Yeek.Database;
 using Yeek.FileHosting;
@@ -71,12 +73,19 @@ builder.Services.AddScoped<IAdminRepository, AdminRepository>();
 builder.AddOidc();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<ModerationService>();
+builder.Services.AddScoped<AdministrationService>();
+builder.Services.AddScoped<MidiService>();
 
 builder.Services.AddRazorComponents();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton<WebDavManager>();
 builder.Services.AddHostedService<WebDavBackgroundWorker>();
+
+builder.Services.AddTickerQ(opt =>
+{
+    opt.SetMaxConcurrency(2);
+});
 
 builder.Services.AddControllers();
 
@@ -85,7 +94,7 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler("/error", createScopeForErrors: true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
@@ -109,11 +118,14 @@ app.MapAuthEndpoint();
 
 app.UseFileHosting();
 app.UseModerationHosting();
+app.UseAdministrationHosting();
 
 app.UseRouting();
 app.UseAuthorization();
 app.UseAntiforgery();
 app.MapControllers();
+
+app.UseTickerQ(TickerQStartMode.Immediate);
 
 app.Run();
 

@@ -21,12 +21,6 @@
 
 <h3>Site Notifications</h3>
 
-<form class="hidden">
-    @{
-        var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
-        <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
-    }
-</form>
 
 <table>
     <tr>
@@ -44,17 +38,67 @@
             <td>@message.Content</td>
             <td>@message.Show</td>
             <td>
-                <button>Toggle Shown</button>
-                <button>Edit Header</button>
-                <button>Edit Content</button>
+                <button type="button" onclick="toggleshow(@message.Id)">Toggle Shown</button>
+                <button type="button" onclick="editheader(@message.Id)">Edit Header</button>
+                <button type="button" onclick="editcontent(@message.Id)">Edit Content</button>
             </td>
         </tr>
     }
 </table>
 
-<form>
-
+<h4>Add New Global Message</h4>
+<form id="new-message-form" method="POST" enctype="multipart/form-data" action="/admin/messages">
+    @{
+        var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+        <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+    }
+    <label for="header">Header:</label>
+    <input type="text" id="header" name="header" required />
+    <br />
+    <label for="content">Content:</label>
+    <textarea type="text" id="content" name="content" required></textarea>
+    <br />
+    <button type="submit">Add Message</button>
 </form>
+
+<script>
+    async function toggleshow(id) {
+        await fetch(`/admin/messages/${id}/toggle`, {
+            method: 'PATCH',
+        });
+        location.reload();
+    }
+
+    async function editheader(id) {
+        const newHeader = prompt('Edit header:');
+        if (newHeader === null) return;
+        await fetch(`/admin/messages/${id}/header`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newHeader)
+        });
+        location.reload();
+    }
+
+    async function editcontent(id) {
+        const raw = prompt('Edit content (use \\n for newlines):');
+        if (raw === null) return;
+
+        // Replace literal backslash-n sequences with actual newline characters
+        const newContent = raw.replace(/\\n/g, "\n");
+
+        await fetch(`/admin/messages/${id}/content`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newContent)
+        });
+        location.reload();
+    }
+</script>
 
 @code {
     [CascadingParameter]
@@ -73,7 +117,7 @@
             return;
         }
 
-        _messages = await AdminRepository.GetAllActiveMessagesAsync();
+        _messages = await AdminRepository.GetAllMessagesAsync();
         HttpContextAccessor.HttpContext!.Response.StatusCode = 200;
     }
 }

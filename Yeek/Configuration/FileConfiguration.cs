@@ -17,4 +17,6 @@ public class FileConfiguration
     public FileSize MaxUploadSize { get; set; } = FileSize.Parse("1MB");
 
     public bool CreateMissingDirectories { get; set; } = true;
+
+    public string SoundFontPath { get; set; } = "FileHosting/Midi/GeneralUser-GS-Bank0.sf2";
 }

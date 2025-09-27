@@ -1,12 +1,13 @@
 ﻿using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Net.Http.Headers;
 using Yeek.Configuration;
 using Yeek.FileHosting.Model;
 using Yeek.FileHosting.Repositories;
 using Yeek.Security;
+using Yeek.Security.Model;
+using Yeek.Security.Repositories;
 using Yeek.WebDAV;
 
 namespace Yeek.FileHosting;
@@ -14,16 +15,37 @@ namespace Yeek.FileHosting;
 public class FileService
 {
     private readonly IFileRepository _fileRepository;
+    private readonly IUserRepository _userRepository;
     private readonly FileConfiguration _fileConfiguration = new();
     private readonly ILogger<FileService> _logger;
     private readonly WebDavManager _webDavManager;
 
-    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager)
+    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository)
     {
         _logger = logger;
         _fileRepository = context;
         _webDavManager = webDavManager;
+        _userRepository = userRepository;
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
+    }
+
+    public async Task<IResult> GetFilePreviewAsResult(Guid fileId, string extension)
+    {
+        if (!await _fileRepository.FileExistsAsync(fileId))
+            return Results.NotFound();
+
+        var filePreview = await _fileRepository.GetFilePreviewOrNullAsync(fileId);
+        if (filePreview == null || !filePreview.SupportedExtensions.Contains($".{extension}"))
+            return Results.NotFound();
+
+        var file = Path.Combine(_fileConfiguration.UserContentDirectory, $"{fileId}.{extension}");
+        if (!File.Exists(file))
+        {
+            _logger.LogError("File preview exists in DB but not in file system. File ID {FileId}, ext {Extension}", fileId, extension);
+            return Results.InternalServerError();
+        }
+
+        return TypedResults.PhysicalFile(Path.GetFullPath(file));
     }
 
     public async Task<IResult> GetFileAsResult(Guid fileId)
@@ -50,6 +72,9 @@ public class FileService
         var userId = user.Claims.GetUserId();
         if (userId == null)
             return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
 
         // Normalizing the fields
         if (string.IsNullOrWhiteSpace(form.Albumname))
@@ -85,6 +110,9 @@ public class FileService
         var userId = user.Claims.GetUserId();
         if (userId == null)
             return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
 
         // Normalizing the fields
         if (string.IsNullOrWhiteSpace(form.Albumname))
@@ -94,7 +122,7 @@ public class FileService
         if (string.IsNullOrWhiteSpace(form.Description))
             form.Description = string.Empty;
 
-        if (form.File.Length > _fileConfiguration.MaxUploadSize)
+        if (form.File == null || form.File.Length > _fileConfiguration.MaxUploadSize)
             return Results.BadRequest($"Maximum upload size exceeded. > {_fileConfiguration.MaxUploadSize}");
 
         await using var ms = new MemoryStream();
@@ -111,7 +139,21 @@ public class FileService
         }
 
         var fileId = Guid.NewGuid();
-        var fileName = $"{fileId}{Path.GetExtension(form.File.FileName)}";
+        var fileExt = Path.GetExtension(form.File.FileName);
+        var fileName = $"{fileId}{fileExt}";
+
+        if (fileExt is not (".mid" or ".midi"))
+        {
+            return Results.BadRequest("File is not a MIDI file (0)!");
+        }
+
+        var isValidMidi = MidiService.IsMidiFileAMidiFile(ms);
+        if (!isValidMidi)
+        {
+            return Results.BadRequest("File is not a MIDI file (1)!");
+        }
+
+        ms.Position = 0;
 
         try
         {
@@ -158,6 +200,9 @@ public class FileService
         var userId = user.Claims.GetUserId();
         if (userId == null)
             return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
 
         if (score is > 1 or < -1)
             return Results.BadRequest("Exceeded vote bounds. Nerd.");
@@ -193,5 +238,15 @@ public class FileService
         stream.Position = 0;
 
         return sb.ToString();
+    }
+
+    private async Task<IResult?> GetBanStatusResult(Guid userId)
+    {
+        var user = await _userRepository.GetUserAsync(userId);
+
+        if (user.TrustLevel <= TrustLevel.Banned)
+            return Results.Text("Account is banned.", statusCode: 403);
+
+        return null;
     }
 }

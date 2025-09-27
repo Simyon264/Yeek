@@ -63,6 +63,28 @@
     <p class="midi-page-uploaded-by">
         Uploaded by: @_uploadedBy.DisplayName
     </p>
+
+    @if (_filePreview == null)
+    {
+        <p class="error-text">No MIDI preview available, please check back in a bit.</p>
+    }
+    else
+    {
+        <audio controls>
+            @foreach (var extension in _filePreview.SupportedExtensions)
+            {
+                var type = extension switch
+                {
+                    ".webm" => "audio/webm; codecs=opus",
+                    ".m4a" => "audio/mp4; codecs=aac",
+                    ".mp3" => "audio/mpeg",
+                    _ => "audio"
+                };
+                <source src="/preview/@(_file.Id)/@extension[1..]" type="@type">
+            }
+            Your browser does not support the audio element.
+        </audio>
+    }
 </div>
 
 <a class="midi-page-download" href="/download/@_file.Id" target="_blank">Download</a>
@@ -167,6 +189,7 @@
     public User? User { get; set; }
 
     private UploadedFile? _file = null;
+    private FilePreview? _filePreview = null;
     private int _userScore = 0;
     private User _uploadedBy = null!;
 
@@ -180,6 +203,7 @@
         }
 
         _file = await FileRepository.GetUploadedFileAsync(Guid);
+        _filePreview = await FileRepository.GetFilePreviewOrNullAsync(Guid);
         _uploadedBy = await UserRepository.GetUserAsync(_file.UploadedById)!;
 
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description))

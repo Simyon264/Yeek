@@ -483,6 +483,53 @@ public class FileRepository : IFileRepository
         });
     }
 
+    public async Task<FilePreview?> GetFilePreviewOrNullAsync(Guid fileId)
+    {
+        const string sql = """
+                           SELECT uploadedfileid AS UploadedFileId,
+                                  supportedextensions AS SupportedExtensions,
+                                  generatedat AS GeneratedAt
+                           FROM filepreviews
+                           WHERE uploadedfileid = @FileId;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        return await con.QueryFirstOrDefaultAsync<FilePreview>(sql, new { FileId = fileId });
+    }
+
+    public async Task AddFilePreviewAsync(Guid fileId, FilePreview preview)
+    {
+        const string sql = """
+                           INSERT INTO filepreviews (uploadedfileid, supportedextensions, generatedat)
+                           VALUES (@UploadedFileId, @SupportedExtensions, @GeneratedAt)
+                           ON CONFLICT (uploadedfileid) 
+                           DO UPDATE SET supportedextensions = EXCLUDED.supportedextensions,
+                                         generatedat = EXCLUDED.generatedat;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        await con.ExecuteAsync(sql, new
+        {
+            UploadedFileId = fileId,
+            SupportedExtensions = preview.SupportedExtensions,
+            GeneratedAt = preview.GeneratedAt
+        });
+    }
+
+    public async Task<Guid[]> GetMissingPreviews()
+    {
+        const string sql = """
+                           SELECT uf.id
+                           FROM uploadedfiles uf
+                           LEFT JOIN filepreviews fp 
+                                  ON uf.id = fp.uploadedfileid
+                           WHERE fp.uploadedfileid IS NULL;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        return (await con.QueryAsync<Guid>(sql)).ToArray();
+    }
+
     // Private helper method
     private async Task<List<UploadedFile>> FetchUploadedFilesAsync(string sql, object? parameters = null)
     {

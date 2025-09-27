@@ -74,6 +74,10 @@ public static class FileHostingExtensions
         app.MapGet("/download/{file:guid}", async (Guid file, FileService fileService)
             => await fileService.GetFileAsResult(file));
 
+        app.MapGet("/preview/{file:guid}/{extension}",
+            async (Guid file, string extension, FileService fileService)
+                => await fileService.GetFilePreviewAsResult(file, extension));
+
         app.MapPatch("vote",
             async (FileService fileService, ClaimsPrincipal user, [FromQuery] int score, [FromQuery] Guid file)
                 => await fileService.VoteAsResult(score, file, user));

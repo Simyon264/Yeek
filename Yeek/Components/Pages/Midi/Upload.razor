@@ -12,6 +12,8 @@
 
 <h1>Upload</h1>
 
+<p>Please follow proper etiquette, this site is meant to be a neat sharing platform. Don't start edit wars.<br/>For more info, see the FAQ for how things should be labelled.</p>
+
 <div class="upload-container">
     <p>Fields marked with a * are required.</p>
 
@@ -103,7 +105,7 @@
 
                 // Fallback: plain text error
                 const text = await result.text();
-                showError("Failed to upload, please try again.");
+                showError(`Failed to upload, please try again: ${text}`);
                 console.error(text);
                 return;
             }
