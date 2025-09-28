@@ -89,7 +89,9 @@ public class WebDavBackgroundWorker : BackgroundService
             if (!string.IsNullOrWhiteSpace(revision.AlbumName))
             {
                 var albumsDir = GetOrCreateDirectory(root, "Albums");
+                albumsDir.XmlCacheByDepth.Clear();
                 var albumDir = GetOrCreateDirectory(albumsDir, revision.AlbumName);
+                albumDir.XmlCacheByDepth.Clear();
                 AddFileToDirectory(albumDir, file);
             }
 
@@ -97,7 +99,9 @@ public class WebDavBackgroundWorker : BackgroundService
             if (!string.IsNullOrWhiteSpace(revision.ArtistName) && !string.IsNullOrWhiteSpace(revision.AlbumName))
             {
                 var artistDir = GetOrCreateDirectory(root, "Artist");
+                artistDir.XmlCacheByDepth.Clear();
                 var artistSubDir = GetOrCreateDirectory(artistDir, revision.ArtistName);
+                artistSubDir.XmlCacheByDepth.Clear();
                 var albumDir = GetOrCreateDirectory(artistSubDir, revision.AlbumName);
                 AddFileToDirectory(albumDir, file);
             }
