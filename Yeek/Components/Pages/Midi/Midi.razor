@@ -14,7 +14,7 @@
 }
 
 @{
-    var title = !string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName)
+    var title = !_hasAlbum
         ? $"Yeek - {_file.MostRecentRevision.AlbumName} {_file.MostRecentRevision.TrackName}"
         : $"Yeek - {_file.MostRecentRevision.TrackName}";
 }
