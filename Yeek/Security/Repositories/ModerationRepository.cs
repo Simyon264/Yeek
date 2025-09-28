@@ -84,7 +84,7 @@ public class ModerationRepository : IModerationRepository
         const string sql = """
                            SELECT 
                                 tm.id, tm.sentbyid, tm.timesent, tm.content, tm.ticketid,
-                                u.id AS UserId, u.displayname, u.trustlevel
+                                u.id AS UserId, u.displayname, u.trustlevel, u.id
                            FROM ticketmessages tm
                            INNER JOIN users u
                                 ON tm.sentbyid = u.id
