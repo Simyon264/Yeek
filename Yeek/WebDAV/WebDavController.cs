@@ -36,6 +36,42 @@ public class WebDavController : ControllerBase
         return Ok(); // 200
     }
 
+    // Ok so RT tries to open the file with write access, windows translates this into a LOCK request.
+    // If said request fails the file wont be opened. So:
+    // Let's just tell the client the request worked! In practise, this doesn't mean anything.
+    [HttpLock("{*path}")]
+    public IActionResult MockLock(string? path)
+    {
+        path = path?.Trim('/') ?? string.Empty;
+
+        var lockToken = $"opaquelocktoken:{Guid.NewGuid()}";
+
+        XNamespace d = "DAV:";
+        var lockDiscovery = new XElement(d + "prop",
+            new XElement(d + "lockdiscovery",
+                new XElement(d + "activelock",
+                    new XElement(d + "locktype", new XElement(d + "write")),
+                    new XElement(d + "lockscope", new XElement(d + "exclusive")),
+                    new XElement(d + "depth", "infinity"),
+                    new XElement(d + "owner", "Mock WebDAV Lock"),
+                    new XElement(d + "timeout", "Second-3600"),
+                    new XElement(d + "locktoken",
+                        new XElement(d + "href", lockToken)
+                    )
+                )
+            )
+        );
+
+        Response.Headers["Lock-Token"] = $"<{lockToken}>";
+
+        return new ContentResult
+        {
+            Content = lockDiscovery.ToString(SaveOptions.DisableFormatting),
+            ContentType = "application/xml; charset=utf-8",
+            StatusCode = (int)HttpStatusCode.OK
+        };
+    }
+
     [HttpGet("{*path}")]
     [EnableRateLimiting("DownloadPolicy")]
     public async Task<IActionResult> GetFile(string path)

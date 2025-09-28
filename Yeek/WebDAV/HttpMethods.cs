@@ -21,3 +21,8 @@ public class HttpCopyAttribute(string template) : HttpMethodAttribute(SupportedM
 {
     private static readonly IEnumerable<string> SupportedMethods = ["COPY"];
 }
+
+public class HttpLockAttribute(string template) : HttpMethodAttribute(SupportedMethods, template)
+{
+    private static readonly IEnumerable<string> SupportedMethods = ["LOCK"];
+}
