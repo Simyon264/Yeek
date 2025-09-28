@@ -18,69 +18,124 @@ public class FileRepository : IFileRepository
     public async Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(
         string query, SearchMode mode, int page = 0, int itemsPerPage = 50)
     {
-        const string countSql = """
-                                WITH search_results AS (
-                                    SELECT DISTINCT ON (fr.uploadedfileid)
-                                        fr.uploadedfileid
-                                    FROM filerevisions fr
-                                    WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
-                                )
-                                SELECT COUNT(*) FROM search_results;
-                                """;
+        var isEmptySearch = string.IsNullOrWhiteSpace(query);
 
         var orderBy = mode switch
         {
-            SearchMode.Relevance => "rank DESC",
+            SearchMode.Relevance => isEmptySearch ? "RANDOM()" : "rank DESC",
             SearchMode.Top => "COALESCE(r.rating, 0) DESC",
             SearchMode.Recent => "uf.uploadedon DESC",
-            _ => "rank DESC"
+            _ => isEmptySearch ? "RANDOM()" : "rank DESC"
         };
 
+        string countSql;
+        string searchSql;
 
-        string searchSql = $"""
-                                WITH latest_revisions AS (
-                                    SELECT DISTINCT ON (fr.uploadedfileid)
-                                        fr.uploadedfileid,
-                                        fr.revisionid,
-                                        fr.updatedbyid,
-                                        fr.updatedon,
-                                        fr.trackname,
-                                        fr.albumname,
-                                        fr.artistname,
-                                        fr.search_tsvector,
-                                        fr.changesummary
-                                    FROM filerevisions fr
-                                    WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
-                                    ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                                ),
-                                ratings AS (
-                                    SELECT uploadedfileid, SUM(score) AS rating
-                                    FROM ratings
-                                    GROUP BY uploadedfileid
-                                )
-                                SELECT uf.id,
-                                       uf.relativepath,
-                                       uf.hash,
-                                       uf.uploadedon,
-                                       uf.uploadedby AS uploadedbyid,
-                                       COALESCE(r.rating, 0) AS rating,
-                                       lr.revisionid,
-                                       lr.updatedbyid,
-                                       lr.updatedon,
-                                       lr.trackname,
-                                       lr.albumname,
-                                       lr.artistname,
-                                       uf.originalname,
-                                       uf.filesize,
-                                       lr.changesummary,
-                                       ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank
-                                FROM uploadedfiles uf
-                                INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                                LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                                ORDER BY {orderBy}
-                                OFFSET @Offset
-                                LIMIT @Limit;
-                            """;
+        if (isEmptySearch)
+        {
+            // No search filter -> just count everything
+            countSql = "SELECT COUNT(*) FROM uploadedfiles;";
+
+            searchSql = $"""
+                             WITH latest_revisions AS (
+                                 SELECT DISTINCT ON (fr.uploadedfileid)
+                                     fr.uploadedfileid,
+                                     fr.revisionid,
+                                     fr.updatedbyid,
+                                     fr.updatedon,
+                                     fr.trackname,
+                                     fr.albumname,
+                                     fr.artistname,
+                                     fr.changesummary
+                                 FROM filerevisions fr
+                                 ORDER BY fr.uploadedfileid, fr.revisionid DESC
+                             ),
+                             ratings AS (
+                                 SELECT uploadedfileid, SUM(score) AS rating
+                                 FROM ratings
+                                 GROUP BY uploadedfileid
+                             )
+                             SELECT uf.id,
+                                    uf.relativepath,
+                                    uf.hash,
+                                    uf.uploadedon,
+                                    uf.uploadedby AS uploadedbyid,
+                                    COALESCE(r.rating, 0) AS rating,
+                                    lr.revisionid,
+                                    lr.updatedbyid,
+                                    lr.updatedon,
+                                    lr.trackname,
+                                    lr.albumname,
+                                    lr.artistname,
+                                    uf.originalname,
+                                    uf.filesize,
+                                    lr.changesummary
+                             FROM uploadedfiles uf
+                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
+                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                             ORDER BY {orderBy}
+                             OFFSET @Offset
+                             LIMIT @Limit;
+                         """;
+        }
+        else
+        {
+            // Normal search with tsvector
+            countSql = """
+                       WITH search_results AS (
+                           SELECT DISTINCT ON (fr.uploadedfileid)
+                               fr.uploadedfileid
+                           FROM filerevisions fr
+                           WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
+                       )
+                       SELECT COUNT(*) FROM search_results;
+                       """;
+
+            searchSql = $"""
+                             WITH latest_revisions AS (
+                                 SELECT DISTINCT ON (fr.uploadedfileid)
+                                     fr.uploadedfileid,
+                                     fr.revisionid,
+                                     fr.updatedbyid,
+                                     fr.updatedon,
+                                     fr.trackname,
+                                     fr.albumname,
+                                     fr.artistname,
+                                     fr.search_tsvector,
+                                     fr.changesummary
+                                 FROM filerevisions fr
+                                 WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
+                                 ORDER BY fr.uploadedfileid, fr.revisionid DESC
+                             ),
+                             ratings AS (
+                                 SELECT uploadedfileid, SUM(score) AS rating
+                                 FROM ratings
+                                 GROUP BY uploadedfileid
+                             )
+                             SELECT uf.id,
+                                    uf.relativepath,
+                                    uf.hash,
+                                    uf.uploadedon,
+                                    uf.uploadedby AS uploadedbyid,
+                                    COALESCE(r.rating, 0) AS rating,
+                                    lr.revisionid,
+                                    lr.updatedbyid,
+                                    lr.updatedon,
+                                    lr.trackname,
+                                    lr.albumname,
+                                    lr.artistname,
+                                    uf.originalname,
+                                    uf.filesize,
+                                    lr.changesummary,
+                                    ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank
+                             FROM uploadedfiles uf
+                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
+                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                             ORDER BY {orderBy}
+                             OFFSET @Offset
+                             LIMIT @Limit;
+                         """;
+        }
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
 

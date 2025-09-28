@@ -15,7 +15,6 @@
             {
                 // There is a better way to do this. I don't care.
                 case "relevance":
-                default:
                     <option value="relevance" selected>Relevance</option>
                     <option value="top">Top Rated</option>
                     <option value="recent">Most Recent</option>
@@ -27,6 +26,7 @@
                     <option value="recent">Most Recent</option>
                     break;
 
+                default:
                 case "recent":
                     <option value="relevance">Relevance</option>
                     <option value="top">Top Rated</option>
@@ -113,7 +113,7 @@ else
     private string? _query;
 
     private int _totalCount;
-    private string _sortBy = "relevance";
+    private string _sortBy = "recent";
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = null!;
@@ -131,19 +131,12 @@ else
         int.TryParse(page, out _page);
         _sortBy = dict.Get("sortby") ?? _sortBy;
 
-        if (string.IsNullOrWhiteSpace(_query))
-        {
-            _totalCount = await FileRepository.GetAllCountAsync();
-            _results = await FileRepository.GetRecentMidisAsync(4*6);
-        }
-        else
-        {
-            var sortByParsed = Enum.Parse<SearchMode>(_sortBy, true);
+        var sortByParsed = Enum.Parse<SearchMode>(_sortBy, true);
+        _query ??= string.Empty;
 
-            var searchResult = await FileRepository.SearchAsync(_query, sortByParsed, _page, 4*6); // max pages: 4 per row, 6 rows
-            _totalCount = searchResult.allCount;
-            _maxPages = searchResult.pageCount;
-            _results = searchResult.result;
-        }
+        var searchResult = await FileRepository.SearchAsync(_query, sortByParsed, _page, 4*4); // max pages: 4 per row, 6 rows
+        _totalCount = searchResult.allCount;
+        _maxPages = searchResult.pageCount;
+        _results = searchResult.result;
     }
 }
