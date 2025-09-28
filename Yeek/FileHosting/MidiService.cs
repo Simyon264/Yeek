@@ -102,6 +102,7 @@ public class MidiService
             settings["player.timing-source"].StringValue = "sample";
             // since this is a non-realtime scenario, there is no need to pin the sample data
             settings["synth.lock-memory"].IntValue = 0;
+            settings["synth.midi-bank-select"].StringValue = "gm";
 
             using var synth = new Synth(settings);
 
