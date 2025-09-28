@@ -233,7 +233,9 @@ public class WebDavController : ControllerBase
     private void AppendResponse(StringBuilder sb, string href, object resource)
     {
         sb.AppendLine("  <d:response>");
-        sb.AppendLine($"    <d:href>/{HttpUtility.UrlPathEncode(href)}</d:href>");
+
+        var encodedHref = WebUtility.HtmlEncode("/" + HttpUtility.UrlPathEncode(href));
+        sb.AppendLine($"    <d:href>{encodedHref}</d:href>");
 
         sb.AppendLine("    <d:propstat>");
         sb.AppendLine("      <d:prop>");
@@ -246,7 +248,7 @@ public class WebDavController : ControllerBase
         else if (resource is UploadedFile file)
         {
             sb.AppendLine("        <d:resourcetype/>");
-            sb.AppendLine($"        <d:displayname>{WebUtility.HtmlEncode(file.OriginalName)}</d:displayname>"); // use original name
+            sb.AppendLine($"        <d:displayname>{WebUtility.HtmlEncode(file.OriginalName)}</d:displayname>");
             sb.AppendLine($"        <Z:Win32FileAttributes>00000001</Z:Win32FileAttributes>");
             sb.AppendLine($"        <d:getlastmodified>{file.UploadedOn:R}</d:getlastmodified>");
             sb.AppendLine($"        <d:getcontentlength>{file.FileSize}</d:getcontentlength>");
