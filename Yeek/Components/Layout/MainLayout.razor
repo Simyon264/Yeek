@@ -1,5 +1,6 @@
 ﻿@using System.Globalization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Http.Extensions
 @using Microsoft.Extensions.Options
 @using Yeek.Configuration
 @using Yeek.Core.Models
@@ -10,6 +11,14 @@
 @using Yeek.Security.Model
 @using Yeek.Security.Repositories
 @inherits LayoutComponentBase
+
+@inject IHttpContextAccessor HttpContextAccessor
+
+<HeadContent>
+    <meta property="og:site_name" content="Yeek"/>
+    <meta name="theme-color" content="#9d32a8">
+    <meta property="og:url" content="@HttpContextAccessor.HttpContext!.Request.GetDisplayUrl()" />
+</HeadContent>
 
 <header class="header">
     <a href="/">Yeek</a>

@@ -13,7 +13,59 @@
     return;
 }
 
-<PageTitle>Yeek - @_file.MostRecentRevision.TrackName</PageTitle>
+@{
+    var title = !string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName)
+        ? $"Yeek - {_file.MostRecentRevision.AlbumName} {_file.MostRecentRevision.TrackName}"
+        : $"Yeek - {_file.MostRecentRevision.TrackName}";
+}
+
+<PageTitle>@title</PageTitle>
+
+<HeadContent>
+    <meta property="og:title" content="@title"/>
+    <meta property="og:description" content=""/>
+    <meta property="og:type" content="music.song"/>
+
+    @if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
+    {
+        <meta property="music:album" content="@_file.MostRecentRevision.AlbumName"/>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+    {
+        <meta property="music:musician" content="@_file.MostRecentRevision.ArtistName"/>
+    }
+
+    @{
+        var lines = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
+        {
+            lines.Add($"Album: {_file.MostRecentRevision.AlbumName}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+        {
+            lines.Add($"Artist: {_file.MostRecentRevision.ArtistName}");
+        }
+
+        var desc = string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description)
+            ? "Hosting your MIDI files for all your Space Station needs."
+            : _file.MostRecentRevision.Description;
+
+        // Add a blank line between album/artist and the description
+        if (lines.Count > 0)
+        {
+            lines.Add("");
+        }
+
+        lines.Add(desc);
+
+        var finalDescription = string.Join("\n", lines);
+    }
+
+    <meta property="og:description" content="@finalDescription"/>
+</HeadContent>
 
 <h4>@_file.MostRecentRevision.TrackName</h4>
 
