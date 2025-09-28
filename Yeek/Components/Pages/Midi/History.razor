@@ -34,7 +34,7 @@
         @_file.MostRecentRevision.Description
     </p>
     <p class="midi-page-uploaded-by">
-        Revision by: @_thisRevisionUser.DisplayName
+        Revision by: <UserNametag User="_thisRevisionUser"/>
     </p>
 
     <a class="report-button" href="/moderation/report/new?topic=midi-@HtmlEncoder.Default.Encode($"{_file.Id}-rev-{_file.MostRecentRevision.RevisionId}")" target="_blank">Report content</a>
@@ -49,7 +49,7 @@
             {
                 <small>You are here!</small>
             }
-            <p class="midi-history-rev-author">By: @revision.UpdatedBy</p>
+            <p class="midi-history-rev-author">By: <UserNametag User="revision.UpdatedBy"/></p>
             <p class="midi-history-rev-summary">@revision.ChangeSummary</p>
         </li>
     }

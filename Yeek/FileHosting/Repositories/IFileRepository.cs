@@ -1,4 +1,5 @@
 ﻿using Yeek.FileHosting.Model;
+using Yeek.Security.Model;
 
 namespace Yeek.FileHosting.Repositories;
 
@@ -51,5 +52,5 @@ public class SummarizedRevision
     public int RevisionId { get; set; }
     public DateTime UpdatedOn { get; set; }
     public string ChangeSummary { get; set; }
-    public string UpdatedBy { get; set; }
+    public User UpdatedBy { get; set; }
 }

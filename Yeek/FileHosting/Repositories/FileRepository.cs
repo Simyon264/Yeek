@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Yeek.Database;
 using Yeek.FileHosting.Model;
+using Yeek.Security.Model;
 
 namespace Yeek.FileHosting.Repositories;
 
@@ -484,18 +485,32 @@ public class FileRepository : IFileRepository
     {
         const string sql = """
                            SELECT 
-                           	fr.revisionid,
-                           	fr.updatedon,
-                           	fr.changesummary,
-                           	u.displayname as updatedby
+                               fr.revisionid,
+                               fr.updatedon,
+                               fr.changesummary,
+                               u.id AS Id,
+                               u.displayname AS DisplayName,
+                               u.trustlevel AS TrustLevel
                            FROM filerevisions fr
                            INNER JOIN users u
-                           	ON fr.updatedbyid = u.id
+                               ON fr.updatedbyid = u.id
                            WHERE fr.uploadedfileid = @Id;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
-        return (await con.QueryAsync<SummarizedRevision>(sql, new { Id = fileId })).ToList();
+
+        var result = await con.QueryAsync<SummarizedRevision, User, SummarizedRevision>(
+            sql,
+            (revision, user) =>
+            {
+                revision.UpdatedBy = user;
+                return revision;
+            },
+            new { Id = fileId },
+            splitOn: "Id" // tells Dapper where the User object starts
+        );
+
+        return result.ToList();
     }
 
     public async Task<UploadedFile?> GetUploadedFilePureAsync(Guid fileId)
