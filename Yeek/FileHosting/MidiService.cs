@@ -21,6 +21,7 @@ public class MidiService
         ".webm", // WebM (Opus codec)
         ".m4a", // AAC (in MP4 container)
         ".mp3", // Fallback
+        ".ogg",  // OGG Vorbis (mono for admemes)
     ];
 
     public MidiService(IFileRepository context, ILogger<MidiService> logger, IConfiguration configuration)
@@ -86,7 +87,7 @@ public class MidiService
 
         try
         {
-            var missingFiles = await _fileRepository.GetMissingPreviews();
+            var missingFiles = await _fileRepository.GetMissingPreviews(ExtensionsToGenerate.ToArray());
 
             if (missingFiles.Length == 0)
             {
@@ -128,6 +129,19 @@ public class MidiService
                     continue;
                 }
 
+                // Find out which extensions are missing for this file
+                var preview = await _fileRepository.GetFilePreviewOrNullAsync(missingFile);
+                var existingExts = preview?.SupportedExtensions ?? [];
+                var missingExts = ExtensionsToGenerate
+                    .Except(existingExts, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (missingExts.Count == 0)
+                {
+                    _logger.LogDebug("All previews already exist for {fileId}", missingFile);
+                    continue;
+                }
+
                 var wavPath = Path.GetTempFileName() + ".wav";
                 settings["audio.file.name"].StringValue = wavPath;
                 using (var player = new Player(synth))
@@ -144,7 +158,7 @@ public class MidiService
                     }
                 }
 
-                foreach (var ext in ExtensionsToGenerate)
+                foreach (var ext in missingExts)
                 {
                     var outputPath = Path.Combine(_fileConfiguration.UserContentDirectory, $"{missingFile}{ext}");
 
@@ -171,6 +185,15 @@ public class MidiService
                                 .FromFileInput(wavPath)
                                 .OutputToFile(outputPath, overwrite: true, options => options
                                     .WithAudioCodec("libmp3lame"))
+                                .ProcessAsynchronously();
+                            break;
+
+                        case ".ogg":
+                            await FFMpegArguments
+                                .FromFileInput(wavPath)
+                                .OutputToFile(outputPath, overwrite: true, options => options
+                                    .WithAudioCodec("libvorbis")
+                                    .WithCustomArgument("-ac 1")) // forces mono
                                 .ProcessAsynchronously();
                             break;
                     }

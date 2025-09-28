@@ -648,8 +648,15 @@ public class FileRepository : IFileRepository
                            INSERT INTO filepreviews (uploadedfileid, supportedextensions, generatedat)
                            VALUES (@UploadedFileId, @SupportedExtensions, @GeneratedAt)
                            ON CONFLICT (uploadedfileid) 
-                           DO UPDATE SET supportedextensions = EXCLUDED.supportedextensions,
-                                         generatedat = EXCLUDED.generatedat;
+                           DO UPDATE SET supportedextensions = (
+                               SELECT ARRAY(
+                                   SELECT DISTINCT unnest(fp.supportedextensions || EXCLUDED.supportedextensions)
+                                   ORDER BY 1
+                               )
+                               FROM filepreviews fp
+                               WHERE fp.uploadedfileid = EXCLUDED.uploadedfileid
+                           ),
+                           generatedat = EXCLUDED.generatedat;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -661,18 +668,22 @@ public class FileRepository : IFileRepository
         });
     }
 
-    public async Task<Guid[]> GetMissingPreviews()
+    public async Task<Guid[]> GetMissingPreviews(string[] requiredExtensions)
     {
         const string sql = """
                            SELECT uf.id
                            FROM uploadedfiles uf
                            LEFT JOIN filepreviews fp 
                                   ON uf.id = fp.uploadedfileid
-                           WHERE fp.uploadedfileid IS NULL;
+                           WHERE fp.uploadedfileid IS NULL
+                              OR NOT (fp.supportedextensions @> @RequiredExtensions);
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
-        return (await con.QueryAsync<Guid>(sql)).ToArray();
+        return (await con.QueryAsync<Guid>(sql, new
+        {
+            RequiredExtensions = requiredExtensions
+        })).ToArray();
     }
 
     /// <summary>
