@@ -249,7 +249,6 @@ public class WebDavController : ControllerBase
         {
             sb.AppendLine("        <d:resourcetype/>");
             sb.AppendLine($"        <d:displayname>{WebUtility.HtmlEncode(file.OriginalName)}</d:displayname>");
-            sb.AppendLine($"        <Z:Win32FileAttributes>00000001</Z:Win32FileAttributes>");
             sb.AppendLine($"        <d:getlastmodified>{file.UploadedOn:R}</d:getlastmodified>");
             sb.AppendLine($"        <d:getcontentlength>{file.FileSize}</d:getcontentlength>");
             sb.AppendLine("        <d:getcontenttype>audio/midi</d:getcontenttype>");
