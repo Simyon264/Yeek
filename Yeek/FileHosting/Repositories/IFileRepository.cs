@@ -36,6 +36,7 @@ public interface IFileRepository
     public Task<FilePreview?> GetFilePreviewOrNullAsync(Guid fileId);
     public Task AddFilePreviewAsync(Guid fileId, FilePreview preview);
     public Task<Guid[]> GetMissingPreviews();
+    public Task<int> GetContributionsForUserAsync(Guid userId);
 }
 
 public enum SearchMode

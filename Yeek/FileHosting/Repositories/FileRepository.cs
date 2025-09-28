@@ -18,7 +18,23 @@ public class FileRepository : IFileRepository
     public async Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(
         string query, SearchMode mode, int page = 0, int itemsPerPage = 50)
     {
+        // God this method keeps getting longer
+        // TODO: Deduplicate all this shit jesus fuck
+
         var isEmptySearch = string.IsNullOrWhiteSpace(query);
+
+        // Check for special "uploadedby:<guid>" query
+        Guid? uploadedByFilter = null;
+        const string uploadedByPrefix = "uploadedby:";
+        if (!isEmptySearch && query.StartsWith(uploadedByPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var guidPart = query.Substring(uploadedByPrefix.Length);
+            if (Guid.TryParse(guidPart, out var parsedGuid))
+            {
+                uploadedByFilter = parsedGuid;
+                isEmptySearch = false; // we still have a filter, just a special one
+            }
+        }
 
         var orderBy = mode switch
         {
@@ -31,7 +47,55 @@ public class FileRepository : IFileRepository
         string countSql;
         string searchSql;
 
-        if (isEmptySearch)
+        if (uploadedByFilter.HasValue)
+        {
+            // Special uploadedby:<guid> filter
+            countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE uploadedby = @UploadedById;";
+
+            searchSql = $"""
+                         WITH latest_revisions AS (
+                             SELECT DISTINCT ON (fr.uploadedfileid)
+                                 fr.uploadedfileid,
+                                 fr.revisionid,
+                                 fr.updatedbyid,
+                                 fr.updatedon,
+                                 fr.trackname,
+                                 fr.albumname,
+                                 fr.artistname,
+                                 fr.changesummary
+                             FROM filerevisions fr
+                             ORDER BY fr.uploadedfileid, fr.revisionid DESC
+                         ),
+                         ratings AS (
+                             SELECT uploadedfileid, SUM(score) AS rating
+                             FROM ratings
+                             GROUP BY uploadedfileid
+                         )
+                         SELECT uf.id,
+                                uf.relativepath,
+                                uf.hash,
+                                uf.uploadedon,
+                                uf.uploadedby AS uploadedbyid,
+                                COALESCE(r.rating, 0) AS rating,
+                                lr.revisionid,
+                                lr.updatedbyid,
+                                lr.updatedon,
+                                lr.trackname,
+                                lr.albumname,
+                                lr.artistname,
+                                uf.originalname,
+                                uf.filesize,
+                                lr.changesummary,
+                                uf.locked
+                         FROM uploadedfiles uf
+                         INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
+                         LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                         WHERE uf.uploadedby = @UploadedById
+                         ORDER BY {orderBy}
+                         OFFSET @Offset
+                         LIMIT @Limit;
+                         """;
+        }  else if (isEmptySearch)
         {
             // No search filter -> just count everything
             countSql = "SELECT COUNT(*) FROM uploadedfiles;";
@@ -141,11 +205,16 @@ public class FileRepository : IFileRepository
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
 
-        var allCount = await con.ExecuteScalarAsync<int>(countSql, new { Query = query });
+        var allCount = await con.ExecuteScalarAsync<int>(countSql, new
+        {
+            Query = query,
+            UploadedById = uploadedByFilter
+        });
 
         var rows = await FetchUploadedFilesAsync(searchSql, new
         {
             Query = query,
+            UploadedById = uploadedByFilter,
             Offset = page * itemsPerPage,
             Limit = itemsPerPage
         });
@@ -589,6 +658,41 @@ public class FileRepository : IFileRepository
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
         return (await con.QueryAsync<Guid>(sql)).ToArray();
+    }
+
+    /// <summary>
+    /// Returns a "score" of sorts for a user.
+    /// The math works out like so:
+    ///  - a file is worth 5
+    ///  - a file revision is worth 1
+    ///  - a ban placed on the user is worth -50
+    /// </summary>
+    public async Task<int> GetContributionsForUserAsync(Guid userId)
+    {
+        const string sql = """
+                           WITH file_count AS (
+                               SELECT COUNT(*) AS count
+                               FROM uploadedfiles
+                               WHERE uploadedby = @UserId
+                           ),
+                           revision_count AS (
+                               SELECT COUNT(*) AS count
+                               FROM filerevisions
+                               WHERE updatedbyid = @UserId
+                           ),
+                           ban_count AS (
+                               SELECT COUNT(*) AS count
+                               FROM bans
+                               WHERE affecteduser = @UserId
+                           )
+                           SELECT 
+                               (fc.count * 5) + (rc.count * 1) - (bc.count * 50) AS total
+                           FROM file_count fc, revision_count rc, ban_count bc;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        var total = await con.ExecuteScalarAsync<int>(sql, new { UserId = userId });
+        return total;
     }
 
     // Private helper method

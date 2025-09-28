@@ -1,0 +1,62 @@
+﻿@page "/profile/{UserId:guid}"
+@using Yeek.Core.Types
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@if (_userResult == null)
+{
+    <PageTitle>Yeek - Profile</PageTitle>
+    <p class="error-text">Profile not found.</p>
+    return;
+}
+
+<PageTitle>Yeek - Profile: @_userResult.DisplayName</PageTitle>
+
+<OpenGraph>
+    <meta property="og:title" content="Yeek - Profile: @_userResult.DisplayName"/>
+    <meta property="og:description" content="Overview for @_userResult.DisplayName"/>
+    <meta property="og:type" content="website"/>
+</OpenGraph>
+
+<h3>Profile: <UserNametag User="_userResult"/></h3>
+<p>
+    Trust: @_userResult.TrustLevel<br/>
+    Contribution Score: @_score<br/>
+    <small>The Contribution Score is a number indicating how much the user has helped to label and upload.</small>
+</p>
+
+<strong>Quick Links</strong>
+<div class="quick-links">
+    @{
+        var quickLinks = RegexCollection.GetQuickLinksForItem(_userResult);
+
+        foreach (var link in quickLinks)
+        {
+            <a href="@link.href">@link.name</a>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid UserId { get; set; }
+
+    [Inject]
+    private IUserRepository UserRepository { get; set; } = null!;
+
+    [Inject]
+    private IFileRepository FileRepository { get; set; } = null!;
+
+    private User? _userResult = null;
+    private int _score = 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await UserRepository.UserExists(UserId))
+            return;
+
+        _userResult = await UserRepository.GetUserAsync(UserId);
+        _score = await FileRepository.GetContributionsForUserAsync(UserId);
+    }
+}

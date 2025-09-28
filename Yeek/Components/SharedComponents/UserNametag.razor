@@ -1,6 +1,6 @@
 ﻿@using Yeek.Security.Model
 
-<span class="nametag" trust="@TrustLevel!.Value">@Username</span>
+<a href="/profile/@User!.Id" class="nametag" trust="@TrustLevel!.Value">@Username</a>
 
 @code {
     /// <summary>

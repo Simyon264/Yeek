@@ -44,7 +44,7 @@ html {
     background-color: var(--bg-secondary);
 }
 
-a:not(.midi-card, .random-midi) {
+a:not(.midi-card, .random-midi, .nametag) {
     color: var(--fg-link-normal);
 
     &:visited {
@@ -856,25 +856,25 @@ form:not(#mainsearch) input[type="submit"]:active {
     }
 }
 
-span.nametag[trust="Banned"] {
+a.nametag[trust="Banned"] {
     color: #888888;
     font-weight: lighter;
 }
 
-span.nametag[trust="Normal"] {
+a.nametag[trust="Normal"] {
     color: inherit;
 }
 
-span.nametag[trust="Trusted"] {
+a.nametag[trust="Trusted"] {
     color: green;
 }
 
-span.nametag[trust="Moderator"] {
+a.nametag[trust="Moderator"] {
     color: orange;
     font-weight: bold;
 }
 
-span.nametag[trust="Admin"] {
+a.nametag[trust="Admin"] {
     color: red;
     font-weight: bold;
 }

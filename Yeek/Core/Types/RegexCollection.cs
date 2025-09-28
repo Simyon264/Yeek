@@ -26,4 +26,13 @@ public static partial class RegexCollection
 
         return list;
     }
+
+    public static List<(string href, string name)> GetQuickLinksForItem(User user)
+    {
+        var list = new List<(string href, string name)>();
+
+        list.Add(($"/?search=uploadedby%3A{user.Id}&sortby=recent", $"MIDIs uploaded by {user.DisplayName}"));
+
+        return list;
+    }
 }
