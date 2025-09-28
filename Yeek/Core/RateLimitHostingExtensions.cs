@@ -71,7 +71,7 @@ public static class RateLimitHostingExtensions
                     key,
                     _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit = 10,
+                        PermitLimit = 20,
                         Window = TimeSpan.FromMinutes(3),
                         QueueLimit = 0,
                         AutoReplenishment = true
