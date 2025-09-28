@@ -68,6 +68,8 @@ public class WebDavBackgroundWorker : BackgroundService
             var revision = file.MostRecentRevision;
             var root = _webDavManager.RootDirectory;
 
+            RemoveFileFromTree(root, file.Id);
+
             // Unsorted (all files)
             var unsortedDir = GetOrCreateDirectory(root, "Unsorted");
             AddFileToDirectory(unsortedDir, file);
@@ -120,6 +122,26 @@ public class WebDavBackgroundWorker : BackgroundService
 
         _webDavManager.Ready = true;
         _logger.LogInformation("VFS update completed.");
+    }
+
+    private bool RemoveFileFromTree(Directory dir, Guid fileId)
+    {
+        // Remove file from this directory
+        dir.Files.RemoveAll(f => f.Id == fileId);
+
+        // Recurse into children and remove empty ones
+        for (var i = dir.Children.Count - 1; i >= 0; i--)
+        {
+            var child = dir.Children[i];
+            if (RemoveFileFromTree(child, fileId))
+            {
+                // If child became empty after removal, drop it
+                dir.Children.RemoveAt(i);
+            }
+        }
+
+        // Return true if this directory is now empty and not root
+        return dir is { IsRoot: false, Files.Count: 0, Children.Count: 0 };
     }
 
     /// <summary>
