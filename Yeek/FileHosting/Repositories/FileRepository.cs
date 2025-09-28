@@ -69,7 +69,8 @@ public class FileRepository : IFileRepository
                                     lr.artistname,
                                     uf.originalname,
                                     uf.filesize,
-                                    lr.changesummary
+                                    lr.changesummary,
+                                    uf.locked
                              FROM uploadedfiles uf
                              INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                              LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -127,6 +128,7 @@ public class FileRepository : IFileRepository
                                     uf.originalname,
                                     uf.filesize,
                                     lr.changesummary,
+                                    uf.locked,
                                     ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank
                              FROM uploadedfiles uf
                              INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
@@ -188,7 +190,8 @@ public class FileRepository : IFileRepository
                              lr.artistname,
                              uf.originalname,
                              uf.filesize,
-                             lr.changesummary
+                             lr.changesummary,
+                             uf.locked
                       FROM uploadedfiles uf
                       INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                       LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -234,7 +237,8 @@ public class FileRepository : IFileRepository
                                   lr.artistname,
                                   uf.originalname,
                                   uf.filesize,
-                                  lr.changesummary
+                                  lr.changesummary,
+                                  uf.locked
                            FROM uploadedfiles uf
                            INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                            LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -346,7 +350,8 @@ public class FileRepository : IFileRepository
                            	       lr.description,
                            	       uf.originalname,
                            	       uf.filesize,
-                           	       lr.changesummary
+                           	       lr.changesummary,
+                           	       uf.locked
                            	       FROM uploadedfiles uf
                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -380,7 +385,8 @@ public class FileRepository : IFileRepository
                                       fr.changesummary,
                                       uf.originalname,
                                       uf.filesize,
-                                      fr.description
+                                      fr.description,
+                                      uf.locked
                                FROM uploadedfiles uf
                                INNER JOIN filerevisions fr 
                                    ON uf.id = fr.uploadedfileid AND fr.revisionid = @Revision
@@ -602,6 +608,7 @@ public class FileRepository : IFileRepository
             Rating = r.Rating,
             FileSize = r.FileSize,
             OriginalName = r.OriginalName,
+            Locked = r.Locked,
             FileRevisions = new List<FileRevision>
             {
                 new FileRevision
@@ -639,6 +646,7 @@ public class FileRepository : IFileRepository
         public DateTime UploadedOn { get; set; }
         public Guid UploadedById { get; set; }
         public int Rating { get; set; }
+        public bool Locked { get; set; }
 
         public int FileSize { get; set; }
         public string OriginalName { get; set; } = null!;

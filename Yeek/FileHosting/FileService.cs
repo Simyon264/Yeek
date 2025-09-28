@@ -88,6 +88,16 @@ public class FileService
         if (!fileExists)
             return Results.NotFound();
 
+        // This queries the db twice since we already query inside of GetBanStatusResult
+        // TODO: fix.
+        var userObj = await _userRepository.GetUserAsync(userId.Value);
+
+        var file = await _fileRepository.GetUploadedFileAsync(form.Id!.Value);
+        if (file.Locked && userObj.TrustLevel < TrustLevel.Trusted)
+        {
+            return Results.Text("This file is locked, you cannot edit it.", statusCode: 403);
+        }
+
         await _fileRepository.EditFileAsync(form.Id!.Value, new FileRevision()
         {
             TrackName = form.Trackname,

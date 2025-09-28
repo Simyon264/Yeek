@@ -61,6 +61,10 @@
         </div>
     </form>
 
+    @if (_file.Locked && (User == null || User.TrustLevel < TrustLevel.Trusted))
+    {
+        <p class="error-text">This file is locked, you cannot edit it.</p>
+    }
 
     <button class="upload-button" onclick="save()">Save</button>
     <p class="error-text hidden" id="error-text"></p>
