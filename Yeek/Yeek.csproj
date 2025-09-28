@@ -15,8 +15,6 @@
         <EmbeddedResource Include="Database\Migrations\Script0005_UserLastLogin.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0006_UserNotesTime.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0007_FilePreviews.sql"/>
-        
-        <EmbeddedResource Include="FileHosting\Midi\GeneralUser-GS-Bank0.sf2"/>
     </ItemGroup>
 
     <ItemGroup>
