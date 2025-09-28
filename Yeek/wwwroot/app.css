@@ -790,3 +790,68 @@ form:not(#mainsearch) input[type="submit"]:hover {
 form:not(#mainsearch) input[type="submit"]:active {
     transform: scale(0.96);
 }
+
+.hamburger {
+    display: none;
+    font-size: 1.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--fg-main);
+}
+
+@media (max-width: 1100px) {
+    .main {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .content {
+        width: 100%;
+        order: 1;
+    }
+
+    .sidebar {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        order: 2;
+    }
+
+    .sidebar .notifications {
+        order: 1;
+        max-height: none;
+        margin-bottom: 10px;
+    }
+
+    .sidebar .random-midis {
+        order: 2;
+        max-height: none;
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 600px) {
+    .link-array {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    nav.links {
+        display: none; /* hide by default */
+        flex-direction: column;
+        gap: 10px;
+        background: var(--bg-secondary);
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 10px;
+    }
+
+    nav.links.open {
+        display: flex;
+    }
+
+    .hamburger {
+        display: block;
+    }
+}

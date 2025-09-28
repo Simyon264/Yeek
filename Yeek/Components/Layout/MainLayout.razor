@@ -12,12 +12,17 @@
 @inherits LayoutComponentBase
 
 <OpenGraph>
-    
+
 </OpenGraph>
 
 <header class="header">
     <a href="/">Yeek</a>
-    <nav class="links">
+
+    <button class="hamburger" onclick="ToggleMenu()">
+        ☰
+    </button>
+
+    <nav class="links" id="links">
         <div class="link-array">
             <p class="link-header">Account</p>
             @if (User == null)
@@ -89,8 +94,8 @@
         </CascadingValue>
     </div>
     <div class="sidebar">
-        <small>Wanna take a chance?</small>
         <div class="random-midis">
+            <small>Wanna take a chance?</small>
             @foreach (var uploadedFile in _randomMidis)
             {
                 <a class="random-midi" href="@uploadedFile.Id.ToString("D")">
@@ -116,8 +121,8 @@
                 </a>
             }
         </div>
-        <small>Site Notifications</small>
         <div class="notifications">
+            <small>Site Notifications</small>
             @if (_banExpire != null)
             {
                 <div class="notification banned-notice">
@@ -145,6 +150,18 @@
 {
     @((MarkupString)ServerConfiguration.Value.PlausibleSnippet)
 }
+
+<script>
+    function ToggleMenu() {
+        const linkElement = document.getElementById("links")
+
+        if (linkElement.classList.contains("open")) {
+            linkElement.classList.remove("open")
+        } else {
+            linkElement.classList.add("open")
+        }
+    }
+</script>
 
 @code {
     [CascadingParameter]
