@@ -3,6 +3,7 @@ using System.Text;
 using System.Web;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 using Yeek.Configuration;
@@ -36,6 +37,7 @@ public class WebDavController : ControllerBase
     }
 
     [HttpGet("{*path}")]
+    [EnableRateLimiting("DownloadPolicy")]
     public async Task<IActionResult> GetFile(string path)
     {
         path = path?.Trim('/') ?? string.Empty;

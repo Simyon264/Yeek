@@ -18,7 +18,8 @@ public static class FileHostingExtensions
                         await antiforgery.ValidateRequestAsync(context);
                         var results = new List<ValidationResult>();
                         var validationContext = new ValidationContext(form);
-                        var isValid = Validator.TryValidateObject(form, validationContext, results, validateAllProperties: true);
+                        var isValid = Validator.TryValidateObject(form, validationContext, results,
+                            validateAllProperties: true);
                         if (!isValid)
                         {
                             var errors = results
@@ -38,7 +39,8 @@ public static class FileHostingExtensions
                     }
                 })
             .DisableAntiforgery()
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("UploadPolicy");
 
         app.MapPatch("/upload/midi",
                 async (ClaimsPrincipal user, FileService fileService, HttpContext context, IAntiforgery antiforgery,
@@ -69,10 +71,12 @@ public static class FileHostingExtensions
                     }
                 })
             .DisableAntiforgery()
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RequireRateLimiting("UploadPolicy");
 
         app.MapGet("/download/{file:guid}", async (Guid file, FileService fileService)
-            => await fileService.GetFileAsResult(file));
+            => await fileService.GetFileAsResult(file))
+            .RequireRateLimiting("DownloadPolicy");
 
         app.MapGet("/preview/{file:guid}/{extension}",
             async (Guid file, string extension, FileService fileService)
@@ -80,6 +84,7 @@ public static class FileHostingExtensions
 
         app.MapPatch("vote",
             async (FileService fileService, ClaimsPrincipal user, [FromQuery] int score, [FromQuery] Guid file)
-                => await fileService.VoteAsResult(score, file, user));
+                => await fileService.VoteAsResult(score, file, user))
+            .RequireRateLimiting("VotePolicy");
     }
 }

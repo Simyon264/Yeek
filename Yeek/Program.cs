@@ -1,4 +1,6 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Serilog;
 using TickerQ.DependencyInjection;
 using TickerQ.Utilities.Enums;
@@ -95,6 +97,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.All;
 });
 
+builder.Services.AddRateLimits();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -133,6 +137,7 @@ app.UseAdministrationHosting();
 
 app.UseRouting();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapControllers();
 
