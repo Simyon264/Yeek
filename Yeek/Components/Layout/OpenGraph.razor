@@ -1,0 +1,14 @@
+﻿@using Microsoft.AspNetCore.Http.Extensions
+@inject IHttpContextAccessor HttpContextAccessor
+
+<HeadContent>
+    <meta property="og:site_name" content="Yeek"/>
+    <meta name="theme-color" content="#9d32a8">
+    <meta property="og:url" content="@HttpContextAccessor.HttpContext!.Request.GetDisplayUrl()" />
+    @ChildContent
+</HeadContent>
+
+@code {
+    [Parameter]
+    public required RenderFragment ChildContent { get; set; }
+}

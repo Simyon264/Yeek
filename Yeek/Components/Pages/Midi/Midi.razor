@@ -4,6 +4,7 @@
 @using Yeek.FileHosting.Repositories
 @using Yeek.Security.Model
 @using Yeek.Security.Repositories
+@using Yeek.Components.Layout
 
 @inject IHttpContextAccessor HttpContext
 
@@ -21,17 +22,16 @@
 
 <PageTitle>@title</PageTitle>
 
-<HeadContent>
+<OpenGraph>
     <meta property="og:title" content="@title"/>
-    <meta property="og:description" content=""/>
     <meta property="og:type" content="music.song"/>
 
-    @if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
+    @if (_hasAlbum)
     {
         <meta property="music:album" content="@_file.MostRecentRevision.AlbumName"/>
     }
 
-    @if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+    @if (_hasArtist)
     {
         <meta property="music:musician" content="@_file.MostRecentRevision.ArtistName"/>
     }
@@ -39,19 +39,19 @@
     @{
         var lines = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
+        if (_hasAlbum)
         {
             lines.Add($"Album: {_file.MostRecentRevision.AlbumName}");
         }
 
-        if (!string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+        if (_hasArtist)
         {
             lines.Add($"Artist: {_file.MostRecentRevision.ArtistName}");
         }
 
-        var desc = string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description)
+        var desc = !_hasDescription
             ? "Hosting your MIDI files for all your Space Station needs."
-            : _file.MostRecentRevision.Description;
+            : _file.MostRecentRevision.Description!;
 
         // Add a blank line between album/artist and the description
         if (lines.Count > 0)
@@ -65,7 +65,7 @@
     }
 
     <meta property="og:description" content="@finalDescription"/>
-</HeadContent>
+</OpenGraph>
 
 <h4>@_file.MostRecentRevision.TrackName</h4>
 
@@ -245,6 +245,10 @@
     private int _userScore = 0;
     private User _uploadedBy = null!;
 
+    private bool _hasArtist = true;
+    private bool _hasDescription = true;
+    private bool _hasAlbum = true;
+
     protected override async Task OnParametersSetAsync()
     {
         var fileIsReal = await FileRepository.FileExistsAsync(Guid);
@@ -261,16 +265,19 @@
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description))
         {
             _file.MostRecentRevision.Description = "No description provided.";
+            _hasDescription = false;
         }
 
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
         {
             _file.MostRecentRevision.ArtistName = "No artist";
+            _hasArtist = false;
         }
 
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
         {
             _file.MostRecentRevision.AlbumName = "No album";
+            _hasAlbum = false;
         }
 
         if (User is not null)
