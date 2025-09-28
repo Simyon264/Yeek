@@ -18,10 +18,10 @@ public class MidiService
 
     private static readonly List<string> ExtensionsToGenerate =
     [
-        ".webm", // WebM (Opus codec)
-        ".m4a", // AAC (in MP4 container)
-        ".mp3", // Fallback
+        //".webm", // WebM (Opus codec)
+        //".m4a", // AAC (in MP4 container)
         ".ogg",  // OGG Vorbis (mono for admemes)
+        ".mp3", // Fallback
     ];
 
     public MidiService(IFileRepository context, ILogger<MidiService> logger, IConfiguration configuration)

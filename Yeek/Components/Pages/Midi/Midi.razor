@@ -129,6 +129,7 @@
                     ".webm" => "audio/webm; codecs=opus",
                     ".m4a" => "audio/mp4; codecs=aac",
                     ".mp3" => "audio/mpeg",
+                    ".ogg" => "audio/ogg; codecs=vorbis",
                     _ => "audio"
                 };
                 <source src="/preview/@(_file.Id)/@extension[1..]" type="@type">
