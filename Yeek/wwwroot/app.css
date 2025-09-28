@@ -855,3 +855,26 @@ form:not(#mainsearch) input[type="submit"]:active {
         display: block;
     }
 }
+
+span.nametag[trust="Banned"] {
+    color: #888888;
+    font-weight: lighter;
+}
+
+span.nametag[trust="Normal"] {
+    color: inherit;
+}
+
+span.nametag[trust="Trusted"] {
+    color: green;
+}
+
+span.nametag[trust="Moderator"] {
+    color: orange;
+    font-weight: bold;
+}
+
+span.nametag[trust="Admin"] {
+    color: red;
+    font-weight: bold;
+}

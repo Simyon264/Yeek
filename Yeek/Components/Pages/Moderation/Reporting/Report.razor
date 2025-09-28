@@ -27,7 +27,7 @@
     {
         <div class="report-message">
             <p class="message">@message.Content</p>
-            <small>By: @message.SentBy!.DisplayName at @message.TimeSent.ToString("D", CultureInfo.InvariantCulture)</small>
+            <small>By: <UserNametag User="message.SentBy"/> at @message.TimeSent.ToString("D", CultureInfo.InvariantCulture)</small>
         </div>
     }
 </div>

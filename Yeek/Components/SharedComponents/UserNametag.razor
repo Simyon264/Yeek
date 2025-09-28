@@ -1,0 +1,32 @@
+﻿@using Yeek.Security.Model
+
+<span class="nametag" trust="@TrustLevel!.Value">@Username</span>
+
+@code {
+    /// <summary>
+    /// The user to display
+    /// </summary>
+    [Parameter]
+    public User? User { get; set; }
+
+    /// <summary>
+    /// The username to use for cases where you don't have a user object
+    /// </summary>
+    [Parameter]
+    public string? Username { get; set; }
+
+    /// <summary>
+    /// The trust level to use for cases where you don't have a uesr object.
+    /// </summary>
+    [Parameter]
+    public TrustLevel? TrustLevel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (User != null)
+        {
+            Username = User.DisplayName;
+            TrustLevel = User.TrustLevel;
+        }
+    }
+}
