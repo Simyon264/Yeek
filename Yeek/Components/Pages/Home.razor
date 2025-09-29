@@ -66,49 +66,55 @@ else
 
 @if (_maxPages > 1)
 {
-    @if (_maxPages > 1)
-    {
-        <nav class="pagination">
-            <ul>
-                @* Previous button *@
-                <li class="@( _page == 0 ? "disabled" : "" )">
-                    @{
-                        var prevPage = Math.Max(0, _page - 1);
-                        var prevQuery = HttpUtility.ParseQueryString(string.Empty);
-                        if (!string.IsNullOrWhiteSpace(_query)) prevQuery["search"] = _query;
-                        prevQuery["sortby"] = _sortBy;
-                        prevQuery["page"] = prevPage.ToString();
-                    }
-                    <a href="/?@prevQuery" class="page-link">Previous</a>
-                </li>
-
-                @* Page numbers *@
-                @for (var i = 0; i < _maxPages; i++)
-                {
-                    var isCurrent = i == _page;
-                    var pageQuery = HttpUtility.ParseQueryString(string.Empty);
-                    if (!string.IsNullOrWhiteSpace(_query)) pageQuery["search"] = _query;
-                    pageQuery["sortby"] = _sortBy;
-                    pageQuery["page"] = i.ToString();
-                    <li class="@(isCurrent ? "current" : "")">
-                        <a href="/?@pageQuery" class="page-link">@(@i + 1)</a>
-                    </li>
+    <nav class="pagination">
+        <ul>
+            @* Previous button *@
+            <li class="@(_page == 0 ? "disabled" : "")">
+                @{
+                    var prevPage = Math.Max(0, _page - 1);
                 }
 
-                @* Next button *@
-                <li class="@( _page >= _maxPages - 1 ? "disabled" : "" )">
-                    @{
-                        var nextPage = Math.Min(_maxPages - 1, _page + 1);
-                        var nextQuery = HttpUtility.ParseQueryString(string.Empty);
-                        if (!string.IsNullOrWhiteSpace(_query)) nextQuery["search"] = _query;
-                        nextQuery["sortby"] = _sortBy;
-                        nextQuery["page"] = nextPage.ToString();
+                @{
+                    var prevQuery = HttpUtility.ParseQueryString(string.Empty);
+                    if (!string.IsNullOrWhiteSpace(_query)) {prevQuery["search"] = _query;
                     }
-                    <a href="/?@nextQuery" class="page-link">Next</a>
+                    prevQuery["sortby"] = _sortBy;
+                    prevQuery["page"] = prevPage.ToString();
+                }
+                <a href="/?@prevQuery" class="page-link">Previous</a>
+            </li>
+
+            @* Page numbers *@
+            @for (var i = 0; i < _maxPages; i++)
+            {
+                var isCurrent = i == _page;
+                var pageQuery = HttpUtility.ParseQueryString(string.Empty);
+                if (!string.IsNullOrWhiteSpace(_query)) {pageQuery["search"] = _query;
+                }
+                pageQuery["sortby"] = _sortBy;
+                pageQuery["page"] = i.ToString();
+                <li class="@(isCurrent ? "current" : "")">
+                    <a href="/?@pageQuery" class="page-link">@(@i + 1)</a>
                 </li>
-            </ul>
-        </nav>
-    }
+            }
+
+            @* Next button *@
+            <li class="@(_page >= _maxPages - 1 ? "disabled" : "")">
+                @{
+                    var nextPage = Math.Min(_maxPages - 1, _page + 1);
+                }
+
+                @{
+                    var nextQuery = HttpUtility.ParseQueryString(string.Empty);
+                    if (!string.IsNullOrWhiteSpace(_query)) {nextQuery["search"] = _query;
+                    }
+                    nextQuery["sortby"] = _sortBy;
+                    nextQuery["page"] = nextPage.ToString();
+                }
+                <a href="/?@nextQuery" class="page-link">Next</a>
+            </li>
+        </ul>
+    </nav>
 }
 
 @code
