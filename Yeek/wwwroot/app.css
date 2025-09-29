@@ -893,3 +893,7 @@ a.nametag[trust="Admin"] {
     color: var(--fg-main);
     border-radius: 6px;
 }
+
+.midi-page-description {
+    white-space: pre-wrap; /* respects newlines and wraps text */
+}
