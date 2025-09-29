@@ -72,50 +72,57 @@ else
             <li class="@(_page == 0 ? "disabled" : "")">
                 @{
                     var prevPage = Math.Max(0, _page - 1);
-                }
-
-                @{
-                    var prevQuery = HttpUtility.ParseQueryString(string.Empty);
-                    if (!string.IsNullOrWhiteSpace(_query)) {prevQuery["search"] = _query;
-                    }
-                    prevQuery["sortby"] = _sortBy;
-                    prevQuery["page"] = prevPage.ToString();
+                    var prevQuery = BuildQuery(prevPage);
                 }
                 <a href="/?@prevQuery" class="page-link">Previous</a>
             </li>
 
-            @* Page numbers *@
-            @for (var i = 0; i < _maxPages; i++)
+            @foreach (var pageNum in GetVisiblePages(_page, _maxPages))
             {
-                var isCurrent = i == _page;
-                var pageQuery = HttpUtility.ParseQueryString(string.Empty);
-                if (!string.IsNullOrWhiteSpace(_query)) {pageQuery["search"] = _query;
+                if (pageNum == -1)
+                {
+                    <li class="ellipsis">
+                        <a href="javascript:void(0);" class="page-link" onclick="jumpToPage(@_maxPages)">…</a>
+                    </li>
                 }
-                pageQuery["sortby"] = _sortBy;
-                pageQuery["page"] = i.ToString();
-                <li class="@(isCurrent ? "current" : "")">
-                    <a href="/?@pageQuery" class="page-link">@(@i + 1)</a>
-                </li>
+                else
+                {
+                    var isCurrent = pageNum == _page;
+                    var pageQuery = BuildQuery(pageNum);
+                    <li class="@(isCurrent ? "current" : "")">
+                        <a href="/?@pageQuery" class="page-link">@(@pageNum + 1)</a>
+                    </li>
+                }
             }
 
             @* Next button *@
             <li class="@(_page >= _maxPages - 1 ? "disabled" : "")">
                 @{
                     var nextPage = Math.Min(_maxPages - 1, _page + 1);
-                }
-
-                @{
-                    var nextQuery = HttpUtility.ParseQueryString(string.Empty);
-                    if (!string.IsNullOrWhiteSpace(_query)) {nextQuery["search"] = _query;
-                    }
-                    nextQuery["sortby"] = _sortBy;
-                    nextQuery["page"] = nextPage.ToString();
+                    var nextQuery = BuildQuery(nextPage);
                 }
                 <a href="/?@nextQuery" class="page-link">Next</a>
             </li>
         </ul>
     </nav>
 }
+
+<script>
+function jumpToPage(maxPages) {
+    let page = prompt(`Enter a page number between 1 and ${maxPages}:`);
+    if (page === null) return; // user canceled
+
+    page = parseInt(page);
+    if (isNaN(page) || page < 1 || page > maxPages) {
+        alert("Invalid page number.");
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("page", page - 1); // convert to 0-indexed
+    window.location.search = params.toString();
+}
+</script>
 
 @code
 {
@@ -150,5 +157,53 @@ else
         _totalCount = searchResult.allCount;
         _maxPages = searchResult.pageCount;
         _results = searchResult.result;
+    }
+
+    private string BuildQuery(int page)
+    {
+        var query = HttpUtility.ParseQueryString(string.Empty);
+        if (!string.IsNullOrWhiteSpace(_query)) query["search"] = _query;
+        query["sortby"] = _sortBy;
+        query["page"] = page.ToString();
+        return query.ToString();
+    }
+
+    private IEnumerable<int> GetVisiblePages(int current, int total)
+    {
+        const int maxVisible = 7; // max number of page buttons to show
+        const int edgeCount = 2; // always show first and last 2 pages
+
+        if (total <= maxVisible)
+        {
+            return Enumerable.Range(0, total);
+        }
+
+        var pages = new List<int>();
+
+        // always show first edgeCount pages
+        for (var i = 0; i < edgeCount; i++)
+            pages.Add(i);
+
+        // left ellipsis
+        if (current - 1 > edgeCount)
+            pages.Add(-1);
+
+        // middle pages
+        var start = Math.Max(edgeCount, current - 1);
+        var end = Math.Min(total - edgeCount - 1, current + 1);
+
+        for (var i = start; i <= end; i++)
+            pages.Add(i);
+
+        // right ellipsis
+        if (current + 2 < total - edgeCount)
+            pages.Add(-1);
+
+        // last edgeCount pages
+        for (var i = total - edgeCount; i < total; i++)
+            pages.Add(i);
+
+        // remove duplicates
+        return pages.Distinct();
     }
 }
