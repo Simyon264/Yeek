@@ -156,7 +156,7 @@ public class FileService
         var fileExt = Path.GetExtension(form.File.FileName);
         var fileName = $"{fileId}{fileExt}";
 
-        if (fileExt is not (".mid" or ".midi"))
+        if (fileExt.ToLower() is not (".mid" or ".midi"))
         {
             return Results.BadRequest("File is not a MIDI file (0)!");
         }
