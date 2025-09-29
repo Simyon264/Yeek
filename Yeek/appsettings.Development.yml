@@ -4,6 +4,7 @@ Serilog:
     Default: "Information"
     Override:
       Serilog.AspNetCore.RequestLoggingMiddleware: "Verbose"
+      Npgsql.Command: "Information"
 
 ConnectionStrings:
   default: "Server=127.0.0.1;Port=5432;Database=yeek;User Id=postgres;Password=postgres;Include Error Detail=true;"

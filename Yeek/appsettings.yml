@@ -8,6 +8,7 @@ Serilog:
       Microsoft.Hosting.Lifetime: "Information"
       Microsoft.AspNetCore: "Warning"
       Yeek.FileHosting.MidiService: "Verbose"
+      Npgsql.Command: "Error"
   WriteTo:
     - Name: Console
       Args:
