@@ -45,7 +45,11 @@ public class FileService
             return Results.InternalServerError();
         }
 
-        return TypedResults.PhysicalFile(Path.GetFullPath(file));
+        var uploadedFile = await _fileRepository.GetUploadedFileAsync(fileId);
+
+        return TypedResults.PhysicalFile(Path.GetFullPath(file),
+            fileDownloadName: uploadedFile.GetDownloadName() + $".{extension}",
+            contentType: extension.GetContentTypeForExtension());
     }
 
     public async Task<IResult> GetFileAsResult(Guid fileId)
