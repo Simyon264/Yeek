@@ -16,6 +16,7 @@
         <EmbeddedResource Include="Database\Migrations\Script0006_UserNotesTime.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0007_FilePreviews.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0008_LockedFiles.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0009_FilePreviewRegenerations.sql"/>
     </ItemGroup>
 
     <ItemGroup>

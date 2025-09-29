@@ -1,6 +1,6 @@
 CREATE TABLE FilePreviews(
     UploadedFileId UUID PRIMARY KEY,
-    SupportedExtensions TEXT [], -- Without the '.', so "mp3" "webm" "aac"
+    SupportedExtensions TEXT [], -- With the '.', so ".mp3" ".webm" ".aac"
     GeneratedAt TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT FK_FilePreviews_UploadedFiles FOREIGN KEY (UploadedFileId)

@@ -88,13 +88,18 @@ public class MidiService
         try
         {
             var missingFiles = await _fileRepository.GetMissingPreviews(ExtensionsToGenerate.ToArray());
+            var regenFiles = await _fileRepository.GetFilesNeedingRegenerationAsync();
 
-            if (missingFiles.Length == 0)
-            {
+            // merge them
+            var filesToProcess = missingFiles
+                .Union(regenFiles)
+                .Distinct()
+                .ToArray();
+
+            if (filesToProcess.Length == 0)
                 return;
-            }
 
-            _logger.LogInformation("Generating previews for {count} files!", missingFiles.Length);
+            _logger.LogInformation("Generating previews for {count} files!", filesToProcess.Length);
 
 
             using var settings = new Settings();
@@ -119,7 +124,7 @@ public class MidiService
 
             synth.LoadSoundFont(Path.GetFullPath(_fileConfiguration.SoundFontPath), false);
 
-            foreach (var missingFile in missingFiles)
+            foreach (var fileId in filesToProcess)
             {
                 if (token.IsCancellationRequested)
                 {
@@ -127,7 +132,7 @@ public class MidiService
                     break;
                 }
 
-                var uploadedFile = await _fileRepository.GetUploadedFilePureAsync(missingFile);
+                var uploadedFile = await _fileRepository.GetUploadedFilePureAsync(fileId);
                 if (uploadedFile == null)
                     continue; // ???
 
@@ -139,15 +144,19 @@ public class MidiService
                 }
 
                 // Find out which extensions are missing for this file
-                var preview = await _fileRepository.GetFilePreviewOrNullAsync(missingFile);
+                var preview = await _fileRepository.GetFilePreviewOrNullAsync(fileId);
                 var existingExts = preview?.SupportedExtensions ?? [];
+                var regenerateExts = preview?.Regenerate ?? [];
+
                 var missingExts = ExtensionsToGenerate
                     .Except(existingExts, StringComparer.OrdinalIgnoreCase)
+                    .Union(regenerateExts)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
                 if (missingExts.Count == 0)
                 {
-                    _logger.LogDebug("All previews already exist for {fileId}", missingFile);
+                    _logger.LogDebug("All previews already exist for {fileId}", fileId);
                     continue;
                 }
 
@@ -169,7 +178,7 @@ public class MidiService
 
                 foreach (var ext in missingExts)
                 {
-                    var outputPath = Path.Combine(_fileConfiguration.UserContentDirectory, $"{missingFile}{ext}");
+                    var outputPath = Path.Combine(_fileConfiguration.UserContentDirectory, $"{fileId}{ext}");
 
                     switch (ext)
                     {
@@ -210,14 +219,19 @@ public class MidiService
 
                 // Cleanup
                 File.Delete(wavPath);
-                await _fileRepository.AddFilePreviewAsync(missingFile, new FilePreview()
+                await _fileRepository.AddFilePreviewAsync(fileId, new FilePreview()
                 {
                     GeneratedAt = DateTime.UtcNow,
-                    SupportedExtensions = ExtensionsToGenerate.ToArray(),
-                    UploadedFileId = missingFile,
+                    SupportedExtensions = existingExts
+                        .Union(missingExts, StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    UploadedFileId = fileId,
+                    Regenerate = [] // clear regenerate after processing
                 });
-                _logger.LogDebug("Generated previews for {fileId}!", missingFile);
+                _logger.LogDebug("Generated previews for {fileId}!", fileId);
             }
+
+            _logger.LogDebug("Done!");
         }
         finally
         {

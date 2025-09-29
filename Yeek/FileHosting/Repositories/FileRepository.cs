@@ -631,9 +631,7 @@ public class FileRepository : IFileRepository
     public async Task<FilePreview?> GetFilePreviewOrNullAsync(Guid fileId)
     {
         const string sql = """
-                           SELECT uploadedfileid AS UploadedFileId,
-                                  supportedextensions AS SupportedExtensions,
-                                  generatedat AS GeneratedAt
+                           SELECT *
                            FROM filepreviews
                            WHERE uploadedfileid = @FileId;
                            """;
@@ -645,8 +643,8 @@ public class FileRepository : IFileRepository
     public async Task AddFilePreviewAsync(Guid fileId, FilePreview preview)
     {
         const string sql = """
-                           INSERT INTO filepreviews (uploadedfileid, supportedextensions, generatedat)
-                           VALUES (@UploadedFileId, @SupportedExtensions, @GeneratedAt)
+                           INSERT INTO filepreviews (uploadedfileid, supportedextensions, generatedat, regenerate)
+                           VALUES (@UploadedFileId, @SupportedExtensions, @GeneratedAt, @Regenerate)
                            ON CONFLICT (uploadedfileid) 
                            DO UPDATE SET supportedextensions = (
                                SELECT ARRAY(
@@ -656,7 +654,8 @@ public class FileRepository : IFileRepository
                                FROM filepreviews fp
                                WHERE fp.uploadedfileid = EXCLUDED.uploadedfileid
                            ),
-                           generatedat = EXCLUDED.generatedat;
+                           generatedat = EXCLUDED.generatedat,
+                           regenerate = EXCLUDED.regenerate;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -664,7 +663,8 @@ public class FileRepository : IFileRepository
         {
             UploadedFileId = fileId,
             SupportedExtensions = preview.SupportedExtensions,
-            GeneratedAt = preview.GeneratedAt
+            GeneratedAt = preview.GeneratedAt,
+            Regenerate = preview.Regenerate
         });
     }
 
@@ -684,6 +684,18 @@ public class FileRepository : IFileRepository
         {
             RequiredExtensions = requiredExtensions
         })).ToArray();
+    }
+
+    public async Task<Guid[]> GetFilesNeedingRegenerationAsync()
+    {
+        const string sql = """
+                           SELECT uploadedfileid
+                           FROM filepreviews
+                           WHERE array_length(regenerate, 1) > 0;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        return (await con.QueryAsync<Guid>(sql)).ToArray();
     }
 
     /// <summary>
