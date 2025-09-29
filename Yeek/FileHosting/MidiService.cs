@@ -103,13 +103,21 @@ public class MidiService
             // since this is a non-realtime scenario, there is no need to pin the sample data
             settings["synth.lock-memory"].IntValue = 0;
             settings["synth.midi-bank-select"].StringValue = "gm";
+            settings["synth.device-id"].IntValue = 16;
+
+            // Recommended settings, gotten from https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/README.md#302-fluidsynth
+            settings["synth.reverb.damp"].DoubleValue = 0.3;
+            settings["synth.reverb.level"].DoubleValue = 0.7;
+            settings["synth.reverb.room-size"].DoubleValue = 0.5;
+            settings["synth.reverb.width"].DoubleValue = 0.8;
+            settings["synth.chorus.depth"].DoubleValue = 3.6;
+            settings["synth.chorus.level"].DoubleValue = 0.55;
+            settings["synth.chorus.nr"].IntValue = 4;
+            settings["synth.chorus.speed"].DoubleValue = 0.36;
 
             using var synth = new Synth(settings);
 
-            synth.LoadSoundFont(Path.GetFullPath(_fileConfiguration.SoundFontPath), true);
-
-            for (var i = 0; i < 16; i++)
-                synth.SoundFontSelect(i, 0);
+            synth.LoadSoundFont(Path.GetFullPath(_fileConfiguration.SoundFontPath), false);
 
             foreach (var missingFile in missingFiles)
             {

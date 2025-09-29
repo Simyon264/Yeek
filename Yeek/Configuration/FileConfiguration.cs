@@ -18,5 +18,5 @@ public class FileConfiguration
 
     public bool CreateMissingDirectories { get; set; } = true;
 
-    public string SoundFontPath { get; set; } = "FileHosting/Midi/GeneralUser-GS-Bank0.sf2";
+    public string SoundFontPath { get; set; } = "FileHosting/Midi/GeneralUser-GS.sf2";
 }
