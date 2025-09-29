@@ -108,7 +108,6 @@ public class MidiService
             // since this is a non-realtime scenario, there is no need to pin the sample data
             settings["synth.lock-memory"].IntValue = 0;
             settings["synth.midi-bank-select"].StringValue = "gm";
-            settings["synth.device-id"].IntValue = 16;
 
             // Recommended settings, gotten from https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/README.md#302-fluidsynth
             settings["synth.reverb.damp"].DoubleValue = 0.3;
