@@ -123,7 +123,13 @@
     else
     {
         <audio controls>
-            @foreach (var extension in _filePreview.SupportedExtensions)
+            @{
+                // prefer ogg files if available
+                var sortedExtensions = _filePreview.SupportedExtensions
+                    .OrderByDescending(ext => ext.Equals(".ogg", StringComparison.OrdinalIgnoreCase));
+            }
+
+            @foreach (var extension in sortedExtensions)
             {
                 var type = extension[1..].GetContentTypeForExtension();
                 <source src="/preview/@(_file.Id)/@extension[1..]" type="@type">
