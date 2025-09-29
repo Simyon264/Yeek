@@ -187,7 +187,7 @@ public class WebDavController : ControllerBase
                 }
                 else
                 {
-                    // Last segment → could be directory or file
+                    // Last segment -> could be directory or file
                     var childDir = dir?.Children.FirstOrDefault(d =>
                         string.Equals(d.Name, segment, StringComparison.OrdinalIgnoreCase));
 
@@ -270,7 +270,7 @@ public class WebDavController : ControllerBase
     {
         sb.AppendLine("  <d:response>");
 
-        var encodedHref = WebUtility.HtmlEncode("/" + HttpUtility.UrlPathEncode(href));
+        var encodedHref = WebUtility.HtmlEncode("/webdav/" + HttpUtility.UrlPathEncode(href.TrimStart('/')));
         sb.AppendLine($"    <d:href>{encodedHref}</d:href>");
 
         sb.AppendLine("    <d:propstat>");
@@ -284,7 +284,7 @@ public class WebDavController : ControllerBase
         else if (resource is UploadedFile file)
         {
             sb.AppendLine("        <d:resourcetype/>");
-            sb.AppendLine($"        <d:displayname>{WebUtility.HtmlEncode(file.OriginalName)}</d:displayname>");
+            sb.AppendLine($"        <d:displayname>{WebUtility.HtmlEncode(file.GetDownloadName())}</d:displayname>");
             sb.AppendLine($"        <d:getlastmodified>{file.UploadedOn:R}</d:getlastmodified>");
             sb.AppendLine($"        <d:getcontentlength>{file.FileSize}</d:getcontentlength>");
             sb.AppendLine("        <d:getcontenttype>audio/midi</d:getcontenttype>");
