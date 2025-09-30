@@ -97,13 +97,13 @@ nav.links {
     margin-left: 0;
 }
 
-.link a {
+.link a:not(.nametag) {
     text-decoration: none;
     padding: 5px 10px;
     transition: background 0.2s;
 }
 
-.link a:hover {
+.link a:hover:not(.nametag) {
     background-color: #333;
     border-radius: 4px;
     color: var(--fg-link-normal);
