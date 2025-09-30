@@ -8,6 +8,7 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 using Yeek.Configuration;
 using Yeek.FileHosting.Model;
+using Yeek.FileHosting.Repositories;
 
 namespace Yeek.WebDAV;
 
@@ -18,12 +19,14 @@ public class WebDavController : ControllerBase
     private readonly WebDavManager _webDavManager;
     private readonly FileConfiguration _fileConfiguration = new();
     private readonly ILogger<WebDavController> _logger;
+    private readonly IFileRepository _fileRepository;
 
-    public WebDavController(WebDavManager webDavManager, IConfiguration configuration, ILogger<WebDavController> logger)
+    public WebDavController(WebDavManager webDavManager, IConfiguration configuration, ILogger<WebDavController> logger, IFileRepository fileRepository)
     {
         _webDavManager = webDavManager;
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
         _logger = logger;
+        _fileRepository = fileRepository;
     }
 
     [HttpOptions("{*path}")]
@@ -132,6 +135,8 @@ public class WebDavController : ControllerBase
         {
             return StatusCode(500, "File does not exist in file system, but exists in DB.");
         }
+
+        await _fileRepository.AddDownload(uploadedFile.Id, DownloadType.WebDAV);
 
         var etag = new EntityTagHeaderValue($"\"{uploadedFile.Hash}\"");
 

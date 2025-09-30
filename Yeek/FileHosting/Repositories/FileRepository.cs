@@ -87,7 +87,9 @@ public class FileRepository : IFileRepository
                                 uf.originalname,
                                 uf.filesize,
                                 lr.changesummary,
-                                uf.locked
+                                uf.locked,
+                                uf.downloads,
+                                uf.plays
                          FROM uploadedfiles uf
                          INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                          LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -135,7 +137,9 @@ public class FileRepository : IFileRepository
                                     uf.originalname,
                                     uf.filesize,
                                     lr.changesummary,
-                                    uf.locked
+                                    uf.locked,
+                                    uf.downloads,
+                                    uf.plays
                              FROM uploadedfiles uf
                              INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                              LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -194,7 +198,9 @@ public class FileRepository : IFileRepository
                                     uf.filesize,
                                     lr.changesummary,
                                     uf.locked,
-                                    ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank
+                                    ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank,
+                                    uf.downloads,
+                                    uf.plays
                              FROM uploadedfiles uf
                              INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                              LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -261,7 +267,9 @@ public class FileRepository : IFileRepository
                              uf.originalname,
                              uf.filesize,
                              lr.changesummary,
-                             uf.locked
+                             uf.locked,
+                             uf.downloads,
+                             uf.plays
                       FROM uploadedfiles uf
                       INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                       LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -308,7 +316,9 @@ public class FileRepository : IFileRepository
                                   uf.originalname,
                                   uf.filesize,
                                   lr.changesummary,
-                                  uf.locked
+                                  uf.locked,
+                                  uf.downloads,
+                                  uf.plays
                            FROM uploadedfiles uf
                            INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                            LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -421,7 +431,9 @@ public class FileRepository : IFileRepository
                            	       uf.originalname,
                            	       uf.filesize,
                            	       lr.changesummary,
-                           	       uf.locked
+                           	       uf.locked,
+                                   uf.downloads,
+                                   uf.plays
                            	       FROM uploadedfiles uf
                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -456,7 +468,9 @@ public class FileRepository : IFileRepository
                                       uf.originalname,
                                       uf.filesize,
                                       fr.description,
-                                      uf.locked
+                                      uf.locked,
+                                      uf.downloads,
+                                      uf.plays
                                FROM uploadedfiles uf
                                INNER JOIN filerevisions fr 
                                    ON uf.id = fr.uploadedfileid AND fr.revisionid = @Revision
@@ -733,6 +747,25 @@ public class FileRepository : IFileRepository
         return total;
     }
 
+    public async Task AddDownload(Guid fileId, DownloadType type)
+    {
+        const string sql = """
+                           UPDATE uploadedfiles
+                           SET downloads = downloads + (CASE WHEN @Type = @Website THEN 1 ELSE 0 END),
+                               plays = plays + (CASE WHEN @Type = @WebDAV THEN 1 ELSE 0 END)
+                           WHERE id = @FileId;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        await con.ExecuteAsync(sql, new
+        {
+            FileId = fileId,
+            Type = type,
+            Website = DownloadType.Website,
+            WebDAV = DownloadType.WebDAV
+        });
+    }
+
     // Private helper method
     private async Task<List<UploadedFile>> FetchUploadedFilesAsync(string sql, object? parameters = null)
     {
@@ -751,6 +784,8 @@ public class FileRepository : IFileRepository
             FileSize = r.FileSize,
             OriginalName = r.OriginalName,
             Locked = r.Locked,
+            Downloads = r.Downloads,
+            Plays = r.Plays,
             FileRevisions = new List<FileRevision>
             {
                 new FileRevision
@@ -789,6 +824,8 @@ public class FileRepository : IFileRepository
         public Guid UploadedById { get; set; }
         public int Rating { get; set; }
         public bool Locked { get; set; }
+        public int Downloads { get; set; }
+        public int Plays { get; set; }
 
         public int FileSize { get; set; }
         public string OriginalName { get; set; } = null!;

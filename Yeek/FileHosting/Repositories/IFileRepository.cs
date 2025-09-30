@@ -39,6 +39,15 @@ public interface IFileRepository
     public Task<Guid[]> GetMissingPreviews(string[] requiredExtensions);
     public Task<Guid[]> GetFilesNeedingRegenerationAsync();
     public Task<int> GetContributionsForUserAsync(Guid userId);
+
+    public Task AddDownload(Guid fileId, DownloadType type);
+}
+
+public enum DownloadType
+{
+    Website,
+    // ReSharper disable once InconsistentNaming
+    WebDAV,
 }
 
 public enum SearchMode

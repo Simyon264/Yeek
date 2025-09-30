@@ -67,6 +67,7 @@ public class FileService
         }
 
         var etag = new EntityTagHeaderValue($"\"{fileResult.Hash}\"");
+        await _fileRepository.AddDownload(fileId, DownloadType.Website);
 
         return TypedResults.PhysicalFile(Path.GetFullPath(file), entityTag: etag, fileDownloadName: fileResult.GetDownloadName());
     }

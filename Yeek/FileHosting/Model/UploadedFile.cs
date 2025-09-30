@@ -26,6 +26,11 @@ public class UploadedFile
     public ICollection<FileRevision> FileRevisions { get; set; } = new List<FileRevision>();
     public int? Rating { get; set; }
     public bool Locked { get; set; }
+    public int Downloads { get; set; }
+    public int Plays { get; set; }
+
+    public int TotalDownloads =>
+        Downloads + Plays;
 
     public FileRevision MostRecentRevision => FileRevisions.First();
 
