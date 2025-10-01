@@ -153,6 +153,9 @@ function jumpToPage(maxPages) {
         var sortByParsed = Enum.Parse<SearchMode>(_sortBy, true);
         _query ??= string.Empty;
 
+        if (_page < 0)
+            _page = 0;
+
         var searchResult = await FileRepository.SearchAsync(_query, sortByParsed, _page, 4*4); // max pages: 4 per row, 6 rows
         _totalCount = searchResult.allCount;
         _maxPages = searchResult.pageCount;
