@@ -624,7 +624,7 @@ public class FileRepository : IFileRepository
 
         const string insertSql = """
                                  INSERT INTO filerevisions 
-                                 (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames description, changesummary)
+                                 (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames, description, changesummary)
                                  VALUES (@UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn, @TrackName, @AlbumName, @ArtistNames, @Description, @ChangeSummary);
                                  """;
 
