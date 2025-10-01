@@ -27,7 +27,8 @@ public class FileRevision
     /// <summary>
     /// Optionally, the artist / band name who made this.
     /// </summary>
-    public string? ArtistName { get; set; } = null!;
+    public string? ArtistName => ArtistNames.Length == 0 ? null : string.Join(", ", ArtistNames) ;
+    public string[] ArtistNames { get; set; } = null!;
 
     /// <summary>
     /// Optional description.

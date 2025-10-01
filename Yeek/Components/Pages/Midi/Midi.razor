@@ -70,7 +70,7 @@
 <h4>@_file.MostRecentRevision.TrackName</h4>
 
 <div class="midi-page-info">
-    <p><strong>Author: </strong>@_file.MostRecentRevision.ArtistName</p>
+    <p><strong>Author: </strong>@(_hasArtist ? _file.MostRecentRevision.ArtistName : "No Artist")</p>
     <p><strong>Album: </strong>@_file.MostRecentRevision.AlbumName</p>
     <p><strong>Downloads: </strong>@_file.TotalDownloads</p>
     <div class="midi-page-ratings">
@@ -269,9 +269,8 @@
             _hasDescription = false;
         }
 
-        if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.ArtistName))
+        if (_file.MostRecentRevision.ArtistNames.Length == 0)
         {
-            _file.MostRecentRevision.ArtistName = "No artist";
             _hasArtist = false;
         }
 

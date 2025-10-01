@@ -18,6 +18,7 @@
         <EmbeddedResource Include="Database\Migrations\Script0008_LockedFiles.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0009_FilePreviewRegenerations.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0010_Downloads.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0011_MultiAuthor.sql"/>
     </ItemGroup>
 
     <ItemGroup>

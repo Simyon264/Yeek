@@ -43,9 +43,27 @@
             <br/>
             <input placeholder="zero_one" type="text" name="albumname" id="albumname" maxlength="200" value="@_file.MostRecentRevision.AlbumName"/>
             <br/>
-            <label for="authorname">Author:</label>
-            <br/>
-            <input placeholder="The Living Tombstone" type="text" name="authorname" id="authorname" maxlength="200" value="@_file.MostRecentRevision.ArtistName"/>
+            <div id="author-fields">
+                <label>Authors:</label><br/>
+                @if (_file.MostRecentRevision.ArtistNames.Length == 0)
+                {
+                    <div class="author-input">
+                        <input type="text" name="Authornames" maxlength="200" placeholder="The Living Tombstone" />
+                        <button type="button" class="remove-author" onclick="removeAuthor(this)">✕</button>
+                    </div>
+                }
+                else
+                {
+                    foreach (var artistName in _file.MostRecentRevision.ArtistNames)
+                    {
+                        <div class="author-input">
+                            <input type="text" name="Authornames" maxlength="200" placeholder="The Living Tombstone" value="@artistName" />
+                            <button type="button" class="remove-author" onclick="removeAuthor(this)">✕</button>
+                        </div>
+                    }
+                }
+            </div>
+            <button type="button" onclick="addAuthor()">+ Add another author</button>
         </div>
 
         <div class="basic-info">
@@ -72,6 +90,41 @@
 </div>
 
 <script>
+    function addAuthor() {
+        const container = document.getElementById("author-fields");
+
+        const wrapper = document.createElement("div");
+        wrapper.classList.add("author-input");
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.name = "Authornames"; // Same name for model binding
+        input.maxLength = 200;
+        input.placeholder = "Another author";
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.innerText = "✕";
+        removeBtn.classList.add("remove-author");
+        removeBtn.onclick = () => removeAuthor(removeBtn);
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(removeBtn);
+        container.appendChild(wrapper);
+    }
+
+    function removeAuthor(button) {
+        const wrapper = button.parentElement;
+        const container = document.getElementById("author-fields");
+
+        if (container.querySelectorAll(".author-input").length > 1) {
+            container.removeChild(wrapper);
+        } else {
+            wrapper.querySelector("input").value = ""; // just clear instead
+        }
+    }
+
+
     async function save() {
         const form = document.getElementById('form');
         const formData = new FormData(form);

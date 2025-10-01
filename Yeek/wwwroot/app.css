@@ -897,3 +897,24 @@ a.nametag[trust="Admin"] {
 .midi-page-description {
     white-space: pre-wrap; /* respects newlines and wraps text */
 }
+
+.author-input {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.remove-author {
+    background: #f87171;
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+}
+
+.remove-author:hover {
+    background: #dc2626;
+}

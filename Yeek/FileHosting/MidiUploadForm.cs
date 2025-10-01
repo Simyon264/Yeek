@@ -6,23 +6,17 @@ namespace Yeek.FileHosting;
 
 public partial class MidiUploadForm : IValidatableObject
 {
-    [FromForm]
     public Guid? Id { get; set; }
 
-    [FromForm]
     [StringLength(400, ErrorMessage = "Change Summary may only contain 400 characters.")]
     public string? ChangeSummary { get; set; }
 
-    [FromForm]
     [Required, StringLength(200, ErrorMessage = "Track Name may only contain 200 characters.")]
     public string Trackname { get; set; }
-    [FromForm]
     [StringLength(200, ErrorMessage = "Album Name may only contain 200 characters.")]
     public string? Albumname { get; set; }
-    [FromForm]
-    [StringLength(200, ErrorMessage = "Artist Name may only contain 200 characters.")]
-    public string? Authorname { get; set; }
-    [FromForm]
+    [MaxLength(10, ErrorMessage = "You may only provide up to 10 authors.")]
+    public string[]? Authornames { get; set; }
     [StringLength(4000, ErrorMessage = "Description may only contain 4000 characters.")]
     public string? Description { get; set; }
 
@@ -49,11 +43,26 @@ public partial class MidiUploadForm : IValidatableObject
         }
 
         // Check Authorname
-        if (!string.IsNullOrEmpty(Authorname) && invalidCharsRegex.IsMatch(Authorname))
+        if (Authornames != null)
         {
-            yield return new ValidationResult(
-                "Artist Name contains invalid characters (\\ / : * ? \" < > |).",
-                [nameof(Authorname)]);
+            foreach (var author in Authornames)
+            {
+                if (author.Length > 200)
+                {
+                    yield return new ValidationResult(
+                        "Each author name may only contain 200 characters.",
+                        [nameof(Authornames)]
+                    );
+                }
+
+                if (invalidCharsRegex.IsMatch(author))
+                {
+                    yield return new ValidationResult(
+                        "Author Name contains invalid characters (\\ / : * ? \" < > |).",
+                        [nameof(Authornames)]
+                    );
+                }
+            }
         }
 
         if (Id != null) // this is a patch

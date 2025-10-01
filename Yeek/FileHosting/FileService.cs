@@ -84,8 +84,12 @@ public class FileService
         // Normalizing the fields
         if (string.IsNullOrWhiteSpace(form.Albumname))
             form.Albumname = null;
-        if (string.IsNullOrWhiteSpace(form.Authorname))
-            form.Authorname = null;
+        form.Authornames ??= [];
+        var tempListWhatTheFuckWhyCanINotBindListsInAFormThankYouMicrosoft = form.Authornames.ToList();
+
+        tempListWhatTheFuckWhyCanINotBindListsInAFormThankYouMicrosoft.RemoveAll(string.IsNullOrWhiteSpace);
+        form.Authornames = tempListWhatTheFuckWhyCanINotBindListsInAFormThankYouMicrosoft.ToArray();
+
         if (string.IsNullOrWhiteSpace(form.Description))
             form.Description = string.Empty;
 
@@ -106,13 +110,13 @@ public class FileService
         await _fileRepository.EditFileAsync(form.Id!.Value, new FileRevision()
         {
             TrackName = form.Trackname,
-            ArtistName = form.Authorname,
+            ArtistNames = form.Authornames,
             Description = form.Description,
             AlbumName = form.Albumname,
             UpdatedOn = DateTime.UtcNow,
             UploadedFileId = form.Id!.Value,
             UpdatedById = userId.Value,
-            ChangeSummary = form.ChangeSummary
+            ChangeSummary = form.ChangeSummary!
         });
 
         _webDavManager.Updates.Add(form.Id!.Value);
@@ -132,8 +136,13 @@ public class FileService
         // Normalizing the fields
         if (string.IsNullOrWhiteSpace(form.Albumname))
             form.Albumname = null;
-        if (string.IsNullOrWhiteSpace(form.Authorname))
-            form.Authorname = null;
+        form.Authornames ??= [];
+        var scugWawa = form.Authornames.ToList();
+
+        scugWawa.RemoveAll(string.IsNullOrWhiteSpace);
+        form.Authornames = scugWawa.ToArray();
+
+
         if (string.IsNullOrWhiteSpace(form.Description))
             form.Description = string.Empty;
 
@@ -197,7 +206,7 @@ public class FileService
             UploadedFileId = fileId,
             RevisionId = 0,
             AlbumName = form.Albumname,
-            ArtistName = form.Authorname,
+            ArtistNames = form.Authornames,
             Description = form.Description,
             TrackName = form.Trackname,
             UpdatedById = userId.Value,

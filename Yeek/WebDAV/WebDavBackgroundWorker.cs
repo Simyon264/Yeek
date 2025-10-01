@@ -98,14 +98,32 @@ public class WebDavBackgroundWorker : BackgroundService
             }
 
             // Artist
-            if (!string.IsNullOrWhiteSpace(revision.ArtistName) && !string.IsNullOrWhiteSpace(revision.AlbumName))
+            if (revision.ArtistNames.Length > 0)
             {
                 var artistDir = GetOrCreateDirectory(root, "Artist");
                 artistDir.XmlCacheByDepth.Clear();
-                var artistSubDir = GetOrCreateDirectory(artistDir, revision.ArtistName);
-                artistSubDir.XmlCacheByDepth.Clear();
-                var albumDir = GetOrCreateDirectory(artistSubDir, revision.AlbumName);
-                AddFileToDirectory(albumDir, file);
+
+                foreach (var artist in revision.ArtistNames.Where(a => !string.IsNullOrWhiteSpace(a)))
+                {
+                    var artistSubDir = GetOrCreateDirectory(artistDir, artist);
+                    artistSubDir.XmlCacheByDepth.Clear();
+
+                    if (!string.IsNullOrWhiteSpace(revision.AlbumName))
+                    {
+                        var albumDir = GetOrCreateDirectory(artistSubDir, revision.AlbumName);
+                        albumDir.XmlCacheByDepth.Clear();
+
+                        AddFileToDirectory(albumDir, file);
+                    }
+                    else
+                    {
+                        // If we don't have an album, we put it under "Singles". Technically the wrong term I belive, but I do not care.
+                        var singleDir = GetOrCreateDirectory(artistSubDir, "Singles");
+                        singleDir.XmlCacheByDepth.Clear();
+
+                        AddFileToDirectory(singleDir, file);
+                    }
+                }
             }
 
             // Alphabetical

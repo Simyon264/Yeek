@@ -62,7 +62,7 @@ public class FileRepository : IFileRepository
                                  fr.updatedon,
                                  fr.trackname,
                                  fr.albumname,
-                                 fr.artistname,
+                                 fr.artistnames,
                                  fr.changesummary
                              FROM filerevisions fr
                              ORDER BY fr.uploadedfileid, fr.revisionid DESC
@@ -83,7 +83,7 @@ public class FileRepository : IFileRepository
                                 lr.updatedon,
                                 lr.trackname,
                                 lr.albumname,
-                                lr.artistname,
+                                lr.artistnames,
                                 uf.originalname,
                                 uf.filesize,
                                 lr.changesummary,
@@ -112,7 +112,7 @@ public class FileRepository : IFileRepository
                                      fr.updatedon,
                                      fr.trackname,
                                      fr.albumname,
-                                     fr.artistname,
+                                     fr.artistnames,
                                      fr.changesummary
                                  FROM filerevisions fr
                                  ORDER BY fr.uploadedfileid, fr.revisionid DESC
@@ -133,7 +133,7 @@ public class FileRepository : IFileRepository
                                     lr.updatedon,
                                     lr.trackname,
                                     lr.albumname,
-                                    lr.artistname,
+                                    lr.artistnames,
                                     uf.originalname,
                                     uf.filesize,
                                     lr.changesummary,
@@ -170,7 +170,7 @@ public class FileRepository : IFileRepository
                                      fr.updatedon,
                                      fr.trackname,
                                      fr.albumname,
-                                     fr.artistname,
+                                     fr.artistnames,
                                      fr.search_tsvector,
                                      fr.changesummary
                                  FROM filerevisions fr
@@ -193,7 +193,7 @@ public class FileRepository : IFileRepository
                                     lr.updatedon,
                                     lr.trackname,
                                     lr.albumname,
-                                    lr.artistname,
+                                    lr.artistnames,
                                     uf.originalname,
                                     uf.filesize,
                                     lr.changesummary,
@@ -242,7 +242,7 @@ public class FileRepository : IFileRepository
                               fr.updatedon,
                               fr.trackname,
                               fr.albumname,
-                              fr.artistname,
+                              fr.artistnames,
                               fr.changesummary
                           FROM filerevisions fr
                           ORDER BY fr.uploadedfileid, fr.revisionid DESC
@@ -263,7 +263,7 @@ public class FileRepository : IFileRepository
                              lr.updatedon,
                              lr.trackname,
                              lr.albumname,
-                             lr.artistname,
+                             lr.artistnames,
                              uf.originalname,
                              uf.filesize,
                              lr.changesummary,
@@ -291,7 +291,7 @@ public class FileRepository : IFileRepository
                                    fr.updatedon,
                                    fr.trackname,
                                    fr.albumname,
-                                   fr.artistname,
+                                   fr.artistnames,
                                    fr.changesummary
                                FROM filerevisions fr
                                ORDER BY fr.uploadedfileid, fr.revisionid DESC
@@ -312,7 +312,7 @@ public class FileRepository : IFileRepository
                                   lr.updatedon,
                                   lr.trackname,
                                   lr.albumname,
-                                  lr.artistname,
+                                  lr.artistnames,
                                   uf.originalname,
                                   uf.filesize,
                                   lr.changesummary,
@@ -365,11 +365,11 @@ public class FileRepository : IFileRepository
         const string insertRevisionSql = """
                                          INSERT INTO FileRevisions (
                                              UploadedFileId, RevisionId, UpdatedById, UpdatedOn,
-                                             TrackName, AlbumName, ArtistName, Description, ChangeSummary
+                                             TrackName, AlbumName, ArtistNames, Description, ChangeSummary
                                          )
                                          VALUES (
                                              @UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn,
-                                             @TrackName, @AlbumName, @ArtistName, @Description, 'Initial upload.'
+                                             @TrackName, @AlbumName, @ArtistNames, @Description, 'Initial upload.'
                                          );
                                          """;
 
@@ -404,7 +404,7 @@ public class FileRepository : IFileRepository
                                     fr.updatedon,
                                     fr.trackname,
                                     fr.albumname,
-                                    fr.artistname,
+                                    fr.artistnames,
                            	        fr.description,
                            	        fr.changesummary
                                 FROM filerevisions fr
@@ -426,7 +426,7 @@ public class FileRepository : IFileRepository
                                    lr.updatedon,
                                    lr.trackname,
                                    lr.albumname,
-                                   lr.artistname,
+                                   lr.artistnames,
                            	       lr.description,
                            	       uf.originalname,
                            	       uf.filesize,
@@ -463,7 +463,7 @@ public class FileRepository : IFileRepository
                                       fr.updatedon,
                                       fr.trackname,
                                       fr.albumname,
-                                      fr.artistname,
+                                      fr.artistnames,
                                       fr.changesummary,
                                       uf.originalname,
                                       uf.filesize,
@@ -624,8 +624,8 @@ public class FileRepository : IFileRepository
 
         const string insertSql = """
                                  INSERT INTO filerevisions 
-                                 (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistname, description, changesummary)
-                                 VALUES (@UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn, @TrackName, @AlbumName, @ArtistName, @Description, @ChangeSummary);
+                                 (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames description, changesummary)
+                                 VALUES (@UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn, @TrackName, @AlbumName, @ArtistNames, @Description, @ChangeSummary);
                                  """;
 
         await con.ExecuteAsync(insertSql, new
@@ -636,7 +636,7 @@ public class FileRepository : IFileRepository
             UpdatedOn = fileRevision.UpdatedOn,
             TrackName = fileRevision.TrackName,
             AlbumName = fileRevision.AlbumName,
-            ArtistName = fileRevision.ArtistName,
+            ArtistNames = fileRevision.ArtistNames,
             Description = fileRevision.Description ?? string.Empty,
             ChangeSummary = fileRevision.ChangeSummary,
         });
@@ -796,7 +796,7 @@ public class FileRepository : IFileRepository
                     UpdatedOn = r.UpdatedOn,
                     TrackName = r.TrackName,
                     AlbumName = r.AlbumName,
-                    ArtistName = r.ArtistName,
+                    ArtistNames = r.ArtistNames,
                     Description = r.Description ?? string.Empty,
                     ChangeSummary = r.ChangeSummary,
                 }
@@ -835,7 +835,7 @@ public class FileRepository : IFileRepository
         public DateTime UpdatedOn { get; set; }
         public string TrackName { get; set; } = null!;
         public string? AlbumName { get; set; }
-        public string? ArtistName { get; set; }
+        public string[] ArtistNames { get; set; }
         public string? Description { get; set; }
 
         public string ChangeSummary { get; set; } = null!;

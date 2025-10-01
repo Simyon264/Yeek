@@ -11,7 +11,7 @@ public static class FileHostingExtensions
     {
         app.MapPost("/upload/midi",
                 async (ClaimsPrincipal user, FileService fileService, HttpContext context, IAntiforgery antiforgery,
-                    [AsParameters] MidiUploadForm form) =>
+                    [FromForm] MidiUploadForm form) =>
                 {
                     try
                     {
@@ -44,7 +44,7 @@ public static class FileHostingExtensions
 
         app.MapPatch("/upload/midi",
                 async (ClaimsPrincipal user, FileService fileService, HttpContext context, IAntiforgery antiforgery,
-                    [AsParameters] MidiUploadForm form) =>
+                    [FromForm] MidiUploadForm form) =>
                 {
                     try
                     {
