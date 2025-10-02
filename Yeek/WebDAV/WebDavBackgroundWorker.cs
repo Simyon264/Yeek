@@ -11,6 +11,8 @@ public class WebDavBackgroundWorker : BackgroundService
     private readonly ApplicationDbContext _dbContext;
     private readonly IServiceScopeFactory _serviceScopeFactory;
 
+    private readonly HashSet<Guid> _duplicationResolves = [];
+
     public WebDavBackgroundWorker(ILogger<WebDavBackgroundWorker> logger, WebDavManager webDavManager, ApplicationDbContext dbContext, IServiceScopeFactory serviceScopeFactory)
     {
         _logger = logger;
@@ -62,6 +64,11 @@ public class WebDavBackgroundWorker : BackgroundService
             var root = _webDavManager.RootDirectory;
             RemoveFileFromTree(root, fileId);
         }
+
+        // Kind of hacky, but whatever.
+        // We manually put each file that had a duplicated name into the update queue in order to force it to rebuild the tree
+        // So that in the case of "the file names no longer conflict" we can easily remove the counter from the name.
+        _duplicationResolves.ToList().ForEach(pendingUpdates.Enqueue);
 
         while (pendingUpdates.Count > 0 && !stoppingToken.IsCancellationRequested)
         {
@@ -208,10 +215,45 @@ public class WebDavBackgroundWorker : BackgroundService
     /// </summary>
     private void AddFileToDirectory(Directory dir, UploadedFile file)
     {
-        if (dir.Files.All(f => f.Id != file.Id))
+        if (dir.Files.Any(f => f.Id == file.Id))
+            return;
+
+        var counter = 1;
+
+        var clonedFile = new UploadedFile
         {
-            dir.Files.Add(file);
-            dir.XmlCacheByDepth.Clear();
+            Id = file.Id,
+            RelativePath = file.RelativePath,
+            OriginalName = file.OriginalName,
+            FileSize = file.FileSize,
+            Hash = file.Hash,
+            UploadedById = file.UploadedById,
+            UploadedOn = file.UploadedOn,
+            FileRevisions = file.FileRevisions,
+            Rating = file.Rating,
+            Locked = file.Locked,
+            Downloads = file.Downloads,
+            Plays = file.Plays,
+            DeletedId = file.DeletedId
+        };
+
+        while (dir.Files.Any(f =>
+                   string.Equals(f.GetDownloadName(), file.GetDownloadName(), StringComparison.OrdinalIgnoreCase)))
+        {
+            var renamed = $"{file.MostRecentRevision.TrackName} ({counter++})";
+            clonedFile.MostRecentRevision.TrackName = renamed;
         }
+
+        if (counter != 1)
+        {
+            _duplicationResolves.Add(file.Id);
+        }
+        else
+        {
+            _duplicationResolves.Remove(file.Id);
+        }
+
+        dir.Files.Add(clonedFile);
+        dir.XmlCacheByDepth.Clear();
     }
 }
