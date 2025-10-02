@@ -22,9 +22,10 @@ public class SitemapController : ControllerBase
     {
         var sb = new StringBuilder();
 
-        // Allow all
+        // Allow all except /moderation and /admin
         sb.AppendLine("User-agent: *");
-        sb.AppendLine("Disallow:");
+        sb.AppendLine("Disallow: /moderation");
+        sb.AppendLine("Disallow: /admin");
 
         sb.AppendLine($"Sitemap: {Request.Scheme}://{Request.Host}/sitemap_index.xml");
 
