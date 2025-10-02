@@ -16,7 +16,14 @@
 
 @if (_file == null)
 {
-    <p class="error-text">File not found.</p>
+    @if (_fileDeletionReason != null)
+    {
+        <p class="error-text">File deleted: @_fileDeletionReason.Value.GetNotificationReason()</p>
+    }
+    else
+    {
+        <p class="error-text">File not found.</p>
+    }
     return;
 }
 
@@ -201,6 +208,7 @@
     public User? User { get; set; }
 
     private UploadedFile? _file = null;
+    private DeletionReason? _fileDeletionReason;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -210,6 +218,10 @@
             HttpContextAccessor.HttpContext!.Response.StatusCode = 404;
             return;
         }
+
+        _fileDeletionReason = await FileRepository.GetDeletionStatusAsync(Guid);
+        if (_fileDeletionReason != null)
+            return;
 
         _file = await FileRepository.GetUploadedFileAsync(Guid);
         HttpContextAccessor.HttpContext!.Response.StatusCode = 200;

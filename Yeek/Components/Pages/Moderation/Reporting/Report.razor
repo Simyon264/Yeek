@@ -26,7 +26,7 @@
     @foreach (var message in _messages)
     {
         <div class="report-message">
-            <p class="message">@message.Content</p>
+            <p class="message respect-newlines">@message.Content</p>
             <small>By: <UserNametag User="message.SentBy"/> at @message.TimeSent.ToString("D", CultureInfo.InvariantCulture)</small>
         </div>
     }

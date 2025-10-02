@@ -51,7 +51,15 @@ public class UserRepository : IUserRepository
 
         if (getNotifs)
         {
-            throw new NotImplementedException();
+            const string getNotifsSql = """
+                                        SELECT *
+                                        FROM notifications
+                                        WHERE userid = @UserId AND read = false
+                                        ORDER BY created DESC;
+                                        """;
+
+            var notifs = await con.QueryAsync<Notification>(getNotifsSql, new { UserId = user.Id });
+            user.Notifications = notifs.ToList();
         }
 
         if (getRatings)
@@ -113,5 +121,19 @@ public class UserRepository : IUserRepository
                            """;
 
         return (await con.QueryAsync<User>(sql)).ToList();
+    }
+
+    public async Task SetNotificationRead(Guid userId, int notificationId)
+    {
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        const string sql = """
+                           UPDATE notifications SET read = true WHERE id = @Id AND userid = @UserId;
+                           """;
+
+        await con.ExecuteAsync(sql, new
+        {
+            Id = notificationId,
+            UserId = userId
+        });
     }
 }

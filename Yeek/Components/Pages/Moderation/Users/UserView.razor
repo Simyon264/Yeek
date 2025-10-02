@@ -71,7 +71,7 @@
         @foreach (var note in _userNotes)
         {
             <div class="user-note">
-                <p>@note.Content</p>
+                <p class="respect-newlines">@note.Content</p>
                 <small>Note made by: @note.CreatedByUser?.DisplayName on @note.CreatedAt.ToString("F", CultureInfo.InvariantCulture)</small>
             </div>
         }

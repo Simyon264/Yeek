@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Yeek.FileHosting;
 using Yeek.Security.Forms;
 
 namespace Yeek.Security;
@@ -10,6 +11,16 @@ public static class ModerationHostingExtensions
 {
     public static void UseModerationHosting(this WebApplication app)
     {
+        app.MapPost("/moderation/takedown/new",
+                async (ClaimsPrincipal user, FileService moderationService, [FromForm] DeletionForm deletionForm) =>
+                    await moderationService.DeleteFile(user, deletionForm))
+            .RequireAuthorization();
+
+        app.MapPatch("/notifications/{notificationId:int}/read",
+            async (ClaimsPrincipal user, ModerationService moderationService, int notificationId) =>
+                await moderationService.MarkNotificationAsRead(user, notificationId))
+            .RequireAuthorization();
+
         app.MapPost("/moderation/users/{id:guid}/trust",
                 async (ClaimsPrincipal user, ModerationService moderationService, HttpContext context, IAntiforgery antiforgery, Guid id, [FromForm] TrustLevelForm trustform) =>
                 {

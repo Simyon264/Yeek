@@ -19,6 +19,7 @@
         <EmbeddedResource Include="Database\Migrations\Script0009_FilePreviewRegenerations.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0010_Downloads.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0011_MultiAuthor.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0012_ContentRemoval.sql"/>
     </ItemGroup>
 
     <ItemGroup>

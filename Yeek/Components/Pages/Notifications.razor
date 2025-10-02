@@ -1,0 +1,61 @@
+﻿@page "/notifications"
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Security.Model
+
+@attribute [Authorize]
+
+@if (User == null)
+    return;
+
+<h3>Notifications</h3>
+
+@if (User.Notifications!.Count == 0)
+{
+    <p class="errornt-text">No new notifications!</p>
+}
+
+<div class="notifications-page-notifications">
+    @foreach (var notification in User.Notifications!)
+    {
+        <div class="notification-page-notification" severity="@notification.Severity">
+            @switch (notification.ContentType)
+            {
+                case NotificationType.TicketAnswered:
+                    <p>Ticket <a href="/moderation/report/@notification.Payload[0]">@notification.Payload[0]</a> was answered.</p>
+                    break;
+                case NotificationType.Custom:
+                    <p>@notification.Payload[0]</p>
+                    break;
+                case NotificationType.ContentRemoved:
+                    <p>The content at <a href="@notification.Payload[0]">@notification.Payload[1]</a> was removed for the following reason:<br/>@notification.Payload[2]</p>
+                    break;
+                case NotificationType.Banned:
+                    <p>Your account was banned until @notification.Payload[0]<br/>@notification.Payload[1]</p>
+                    break;
+                case NotificationType.TrustChanged:
+                    <p>Your Trust Score was updated to @(((TrustLevel)int.Parse(notification.Payload[0])).ToString())</p>
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            <button onclick="dismiss(@notification.Id, this)" class="notifications-page-dismiss">Mark as read</button>
+        </div>
+    }
+</div>
+
+<script>
+    async function dismiss(ticketId, button) {
+        await fetch(`/notifications/${ticketId}/read`, {
+            method: "patch",
+        });
+
+        button.remove();
+    }
+</script>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+}

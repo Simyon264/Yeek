@@ -39,8 +39,10 @@ public interface IFileRepository
     public Task<Guid[]> GetMissingPreviews(string[] requiredExtensions);
     public Task<Guid[]> GetFilesNeedingRegenerationAsync();
     public Task<int> GetContributionsForUserAsync(Guid userId);
-
     public Task AddDownload(Guid fileId, DownloadType type);
+    public Task<DeletionReason?> GetDeletionStatusAsync(Guid fileId);
+    public Task DeleteFile(Guid fileId, bool allowReupload, DeletionReason reason, Guid user);
+    public Task<bool> GetReuploadStatusForHash(string sha);
 }
 
 public enum DownloadType

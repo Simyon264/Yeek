@@ -126,7 +126,7 @@ public class ModerationRepository : IModerationRepository
             );
 
             var message = resolved ? "resolved" : "open";
-            await InsertMessageIntoTicket(ticketId,$"Changed status to {message}!", userId, transaction, con, false);
+            await InsertMessageIntoTicket(ticketId,$"Changed status to {message}!", userId, transaction, con, true);
             await transaction.CommitAsync();
         }
         catch
@@ -138,7 +138,7 @@ public class ModerationRepository : IModerationRepository
 
     public async Task AddMessageToTicketAsync(int ticketId, Guid userId, string message)
     {
-        await InsertMessageIntoTicket(ticketId, message, userId, notifyUser: false);
+        await InsertMessageIntoTicket(ticketId, message, userId, notifyUser: true);
     }
 
     public async Task<List<Ticket>> GetAllTicketsBasicAsync(Guid? userIdFilter = null)
@@ -251,7 +251,12 @@ public class ModerationRepository : IModerationRepository
                 transaction: transaction
             );
 
-            await AddNote(actingUser, userId, $"Banned user until {formExpires.ToString("F", CultureInfo.InvariantCulture)}", transaction, con);
+            await AddNote(actingUser, userId, $"Banned user until {formExpires.ToString("F", CultureInfo.InvariantCulture)}\n\n{formReason}", transaction, con);
+            await AddNotification(userId, Severity.Generic, NotificationType.Banned,
+            [
+                formExpires.ToString("F", CultureInfo.InvariantCulture),
+                formReason
+            ]);
             await ChangeTrustLevel(actingUser, userId, -1, transaction, con, false);
             await transaction.CommitAsync();
         }
@@ -276,6 +281,24 @@ public class ModerationRepository : IModerationRepository
         await using var con = await _context.DataSource.OpenConnectionAsync();
 
         return await con.QuerySingleOrDefaultAsync<DateTime?>(sql, new { Id = userId });
+    }
+
+    public async Task AddNotification(Guid who, Severity severity, NotificationType contentType, string[] payload)
+    {
+        const string insertNotifySql = """
+                                       INSERT INTO notifications (created, severity, userid, contenttype, payload)
+                                       VALUES (@created, @severity, @userid, @contenttype, @payload)
+                                       """;
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+
+        await con.ExecuteAsync(insertNotifySql, new
+        {
+            Created = DateTime.UtcNow,
+            Severity = severity,
+            UserId = who,
+            ContentType = contentType,
+            Payload = payload
+        });
     }
 
     private async Task ChangeTrustLevel(Guid actingUser, Guid userId, int trustLevel,
@@ -304,6 +327,11 @@ public class ModerationRepository : IModerationRepository
             if (addNote)
             {
                 await AddNote(actingUser, userId, $"Changed trust level to {((TrustLevel)trustLevel).ToString()}", transaction, connection);
+
+                await AddNotification(userId, Severity.Generic, NotificationType.TrustChanged,
+                [
+                    trustLevel.ToString()
+                ]);
             }
         }
         finally
@@ -369,9 +397,14 @@ public class ModerationRepository : IModerationRepository
                                  """;
 
         const string insertNotifySql = """
-                                       INSERT INTO notifications (created, severity, userid)
-                                       VALUES (@created, @severity, @userid)
+                                       INSERT INTO notifications (created, severity, userid, contenttype, payload)
+                                       VALUES (@created, @severity, @userid, @contenttype, @payload)
                                        """;
+
+        const string getInvolvedMembersSql = """
+                                             SELECT distinct(sentbyid) FROM public.ticketmessages
+                                             WHERE ticketid = @Id
+                                             """;
 
         // We will need to manually dispose our connection properly. If we didn't get one
         var suppliedCon = true;
@@ -382,6 +415,8 @@ public class ModerationRepository : IModerationRepository
                 connection = await _context.DataSource.OpenConnectionAsync();
                 suppliedCon = false;
             }
+
+            var involvedUsers = await connection.QueryAsync<Guid>(getInvolvedMembersSql, new { Id = ticketId });
 
             var args = new
             {
@@ -395,13 +430,24 @@ public class ModerationRepository : IModerationRepository
 
             if (notifyUser)
             {
-                throw new NotImplementedException(); // notifications are like kinda not working yet
-                //await connection.ExecuteAsync(insertNotifySql, new
-                //{
-                //    Created = DateTime.UtcNow,
-                //    Severity = 1, // Ticket severity
-                //    UserId = ticketBy
-                //}, transaction: transaction);
+                //throw new NotImplementedException(); // notifications are like kinda not working yet
+                foreach (var user in involvedUsers)
+                {
+                    if (user == sentBy)
+                        continue;
+
+                    await connection.ExecuteAsync(insertNotifySql, new
+                    {
+                        Created = DateTime.UtcNow,
+                        Severity = 1, // Ticket severity
+                        UserId = user,
+                        ContentType = 1,
+                        Payload = new string[]
+                        {
+                            ticketId.ToString(),
+                        }
+                    }, transaction: transaction);
+                }
             }
         }
         finally

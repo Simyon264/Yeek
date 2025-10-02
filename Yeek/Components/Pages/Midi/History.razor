@@ -12,7 +12,14 @@
 @if (_file == null || _thisRevisionUser == null)
 {
     <PageTitle>Yeek - Not Found</PageTitle>
-    <p class="error-text">File not found.</p>
+    @if (_fileDeletionReason != null)
+    {
+        <p class="error-text">File deleted: @_fileDeletionReason.Value.GetNotificationReason()</p>
+    }
+    else
+    {
+        <p class="error-text">File not found.</p>
+    }
     return;
 }
 
@@ -30,7 +37,7 @@
     <p><strong>Author: </strong>@_file.MostRecentRevision.ArtistName</p>
     <p><strong>Album: </strong>@_file.MostRecentRevision.AlbumName</p>
 
-    <p class="midi-page-description">
+    <p class="midi-page-description respect-newlines">
         @_file.MostRecentRevision.Description
     </p>
     <p class="midi-page-uploaded-by">
@@ -68,6 +75,7 @@
     private int _revisionNumber = 0;
     private List<SummarizedRevision> _revisions = [];
     private User? _thisRevisionUser;
+    private DeletionReason? _fileDeletionReason;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -77,6 +85,10 @@
             HttpContext.HttpContext!.Response.StatusCode = 404;
             return;
         }
+
+        _fileDeletionReason = await FileRepository.GetDeletionStatusAsync(Guid);
+        if (_fileDeletionReason != null)
+            return;
 
         var url = new Uri(NavigationManager.Uri);
         var dict = HttpUtility.ParseQueryString(url.Query);

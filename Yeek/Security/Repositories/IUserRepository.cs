@@ -14,4 +14,5 @@ public interface IUserRepository
     public Task UpdateUserNameAsync(Guid userId, string name);
     public Task NotifyLoginAsync(Guid userId);
     public Task<List<User>> GetAllUsersAsync();
+    Task SetNotificationRead(Guid userId, int notificationId);
 }

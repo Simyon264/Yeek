@@ -2,6 +2,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Net.Http.Headers;
+using TickerQ.Utilities.Base;
 using Yeek.Configuration;
 using Yeek.FileHosting.Model;
 using Yeek.FileHosting.Repositories;
@@ -29,9 +30,36 @@ public class FileService
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
     }
 
+    public async Task<IResult> DeleteFile(ClaimsPrincipal user, DeletionForm deletionForm)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+
+        var userObject = await _userRepository.GetUserAsync(userId.Value);
+        if (userObject.TrustLevel < TrustLevel.Moderator)
+            return Results.Forbid();
+
+        var existingDeletion = await _fileRepository.GetDeletionStatusAsync(deletionForm.FileId);
+        if (existingDeletion is not null)
+        {
+            return Results.BadRequest("File already deleted.");
+        }
+
+        await _fileRepository.DeleteFile(deletionForm.FileId, deletionForm.ParsedAllowReupload, deletionForm.Reason, userId.Value);
+
+        _webDavManager.Deletes.Add(deletionForm.FileId);
+
+        return Results.Redirect($"/{deletionForm.FileId}");
+    }
+
     public async Task<IResult> GetFilePreviewAsResult(Guid fileId, string extension)
     {
         if (!await _fileRepository.FileExistsAsync(fileId))
+            return Results.NotFound();
+
+        var uploadedFile = await _fileRepository.GetUploadedFileAsync(fileId);
+        if (uploadedFile.DeletedId is not null)
             return Results.NotFound();
 
         var filePreview = await _fileRepository.GetFilePreviewOrNullAsync(fileId);
@@ -45,7 +73,6 @@ public class FileService
             return Results.InternalServerError();
         }
 
-        var uploadedFile = await _fileRepository.GetUploadedFileAsync(fileId);
 
         return TypedResults.PhysicalFile(Path.GetFullPath(file),
             fileDownloadName: uploadedFile.GetDownloadName() + $".{extension}",
@@ -58,6 +85,8 @@ public class FileService
             return Results.NotFound();
 
         var fileResult = await _fileRepository.GetUploadedFileAsync(fileId);
+        if (fileResult.DeletedId is not null)
+            return Results.NotFound();
 
         var file = Path.Combine(_fileConfiguration.UserContentDirectory, fileResult.RelativePath);
         if (!File.Exists(file))
@@ -106,6 +135,9 @@ public class FileService
         {
             return Results.Text("This file is locked, you cannot edit it.", statusCode: 403);
         }
+
+        if (file.DeletedId is not null)
+            return Results.Text("Cannot edit deleted files.");
 
         await _fileRepository.EditFileAsync(form.Id!.Value, new FileRevision()
         {
@@ -156,6 +188,12 @@ public class FileService
         }
 
         var sha = CalculateHash(ms);
+        var canUpload = await _fileRepository.GetReuploadStatusForHash(sha);
+        if (!canUpload)
+        {
+            return Results.BadRequest("File is blocked for uploading. This is probably because of legal reasons. Create a ticket to resolve this if you belive this may be an error.");
+        }
+
         var existingFile = await _fileRepository.FindFileByShaAsync(sha);
         if (existingFile.foundMatch)
         {
@@ -233,6 +271,12 @@ public class FileService
 
         if (!await _fileRepository.FileExistsAsync(fileId))
             return Results.NotFound();
+
+        var status = await _fileRepository.GetDeletionStatusAsync(fileId);
+        if (status != null)
+        {
+            return Results.BadRequest("Cannot vote on deleted files.");
+        }
 
         if (score == 0)
         {

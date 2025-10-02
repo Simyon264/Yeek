@@ -32,6 +32,8 @@ public class UploadedFile
     public int TotalDownloads =>
         Downloads + Plays;
 
+    public int? DeletedId { get; set; }
+
     public FileRevision MostRecentRevision => FileRevisions.First();
 
     public string GetDownloadName()

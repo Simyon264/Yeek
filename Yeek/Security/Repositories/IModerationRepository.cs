@@ -20,4 +20,5 @@ public interface IModerationRepository
     Task AddBanAsync(Guid actingUser, Guid userId, DateTime formExpires, string formReason);
     Task ChangeTrustLevelAsync(Guid actingUser, Guid userId, int formTrustLevel);
     Task<DateTime?> GetLatestBanExpireOrNullForUserAsync(Guid userId);
+    Task AddNotification(Guid who, Severity severity, NotificationType contentType, string[] payload);
 }

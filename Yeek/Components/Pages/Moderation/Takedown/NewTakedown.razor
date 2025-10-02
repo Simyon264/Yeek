@@ -1,0 +1,76 @@
+﻿@page "/moderation/takedown/new"
+@using System.Web
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+
+@attribute [Authorize]
+
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
+
+<h3>Issue Takedown</h3>
+
+@if (User == null || User.TrustLevel < TrustLevel.Moderator)
+{
+    <p class="error-text">Nuh uh.</p>
+    return;
+}
+
+@if (_isDeletedAlready)
+{
+    <p class="error-text">Requested item is already deleted.</p>
+}
+
+<form method="post" action="/moderation/takedown/new">
+    @{
+        var token = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!);
+        <input name="@token.FormFieldName" type="hidden" value="@token.RequestToken" />
+    }
+
+    <label for="fileId">File ID:</label>
+    <input type="text" id="fileId" name="fileId" value="@_item"/>
+    <label for="allowReupload">Allow Reupload:</label>
+    <input type="checkbox" id="allowReupload" name="allowReupload"/>
+    <label for="reason">Reason (0 Unspecified, 1 UserRequest, 2 Takedown):</label>
+    <input type="number" id="reason" name="reason"/>
+
+    <input type="submit"/>
+</form>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    [Inject]
+    private IFileRepository FileRepository { get; set; } = null!;
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = null!;
+
+    private Guid _item;
+    private bool _isDeletedAlready = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null || User.TrustLevel < TrustLevel.Moderator)
+        {
+            HttpContext!.Response.StatusCode = 403;
+            return;
+        }
+
+        var url = new Uri(NavigationManager.Uri);
+        var dict = HttpUtility.ParseQueryString(url.Query);
+
+        if (Guid.TryParse(dict.Get("item"), out _item))
+        {
+            _isDeletedAlready = await FileRepository.GetDeletionStatusAsync(_item) != null;
+        }
+
+        HttpContext!.Response.StatusCode = 200;
+    }
+}

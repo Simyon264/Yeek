@@ -21,6 +21,8 @@ public class Notification
     /// The severity of the notification. Determines what color it gets in the UI
     /// </summary>
     public Severity Severity { get; set; } = Severity.Generic;
+    public NotificationType ContentType { get; set; }
+    public string[] Payload { get; set; } = null!;
 
     public Guid UserId { get; set; }
 }
@@ -36,4 +38,16 @@ public enum Severity : byte
     /// this was a notifiaction relating to a report.
     /// </summary>
     Ticket = 1,
+}
+
+/// <summary>
+/// Defines what message to use
+/// </summary>
+public enum NotificationType : byte
+{
+    Custom = 0,
+    TicketAnswered = 1,
+    ContentRemoved = 2,
+    Banned = 3,
+    TrustChanged = 4,
 }

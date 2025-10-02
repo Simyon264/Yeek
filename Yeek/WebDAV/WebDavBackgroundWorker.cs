@@ -25,7 +25,7 @@ public class WebDavBackgroundWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (_webDavManager.Updates.Count > 0 || !_webDavManager.Ready)
+            if (_webDavManager.Updates.Count > 0 || !_webDavManager.Ready || _webDavManager.Deletes.Count > 0)
             {
                 await Update(stoppingToken);
             }
@@ -50,6 +50,19 @@ public class WebDavBackgroundWorker : BackgroundService
         var pendingUpdates = new Queue<Guid>(_webDavManager.Updates);
         _webDavManager.Updates.Clear();
 
+        var pendingDeletes = new Queue<Guid>(_webDavManager.Deletes);
+        _webDavManager.Deletes.Clear();
+
+        while (pendingDeletes.Count > 0 && !stoppingToken.IsCancellationRequested)
+        {
+            var fileId = pendingDeletes.Dequeue();
+
+            _logger.LogInformation("Deleting file {FileId} from VFS...", fileId);
+
+            var root = _webDavManager.RootDirectory;
+            RemoveFileFromTree(root, fileId);
+        }
+
         while (pendingUpdates.Count > 0 && !stoppingToken.IsCancellationRequested)
         {
             var fileId = pendingUpdates.Dequeue();
@@ -62,6 +75,12 @@ public class WebDavBackgroundWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to fetch file {FileId}, skipping.", fileId);
+                continue;
+            }
+
+            if (file.DeletedId != null)
+            {
+                _logger.LogDebug("File {id} is deleted, skipping...", fileId);
                 continue;
             }
 
@@ -145,7 +164,11 @@ public class WebDavBackgroundWorker : BackgroundService
     private bool RemoveFileFromTree(Directory dir, Guid fileId)
     {
         // Remove file from this directory
-        dir.Files.RemoveAll(f => f.Id == fileId);
+        var removed = dir.Files.RemoveAll(f => f.Id == fileId);
+        if (removed > 0)
+        {
+            dir.XmlCacheByDepth.Clear();
+        }
 
         // Recurse into children and remove empty ones
         for (var i = dir.Children.Count - 1; i >= 0; i--)

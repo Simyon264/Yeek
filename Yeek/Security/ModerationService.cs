@@ -133,4 +133,15 @@ public class ModerationService
 
         return Results.Redirect($"/moderation/users/{id}", false);
     }
+
+    public async Task<IResult> MarkNotificationAsRead(ClaimsPrincipal user, int notificationId)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+
+        await _userRepository.SetNotificationRead(userId.Value, notificationId);
+
+        return Results.NoContent();
+    }
 }

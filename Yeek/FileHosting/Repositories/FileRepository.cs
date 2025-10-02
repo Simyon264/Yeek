@@ -2,6 +2,7 @@
 using Yeek.Database;
 using Yeek.FileHosting.Model;
 using Yeek.Security.Model;
+using Yeek.Security.Repositories;
 
 namespace Yeek.FileHosting.Repositories;
 
@@ -9,11 +10,13 @@ public class FileRepository : IFileRepository
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<FileRepository> _logger;
+    private readonly IModerationRepository _moderationRepository;
 
-    public FileRepository(ApplicationDbContext dbContext, ILogger<FileRepository> logger)
+    public FileRepository(ApplicationDbContext dbContext, ILogger<FileRepository> logger, IModerationRepository moderationRepository)
     {
         _context = dbContext;
         _logger = logger;
+        _moderationRepository = moderationRepository;
     }
 
     public async Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(
@@ -51,7 +54,12 @@ public class FileRepository : IFileRepository
         if (uploadedByFilter.HasValue)
         {
             // Special uploadedby:<guid> filter
-            countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE uploadedby = @UploadedById;";
+            countSql = """
+                       SELECT COUNT(*)
+                       FROM uploadedfiles
+                       WHERE uploadedby = @UploadedById
+                         AND deletedid IS NULL;
+                       """;
 
             searchSql = $"""
                          WITH latest_revisions AS (
@@ -94,6 +102,7 @@ public class FileRepository : IFileRepository
                          INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                          LEFT JOIN ratings r ON uf.id = r.uploadedfileid
                          WHERE uf.uploadedby = @UploadedById
+                           AND uf.deletedid IS NULL
                          ORDER BY {orderBy}
                          OFFSET @Offset
                          LIMIT @Limit;
@@ -101,51 +110,56 @@ public class FileRepository : IFileRepository
         }  else if (isEmptySearch)
         {
             // No search filter -> just count everything
-            countSql = "SELECT COUNT(*) FROM uploadedfiles;";
+            countSql = """
+                       SELECT COUNT(*)
+                       FROM uploadedfiles
+                       WHERE deletedid IS NULL;
+                       """;
 
             searchSql = $"""
-                             WITH latest_revisions AS (
-                                 SELECT DISTINCT ON (fr.uploadedfileid)
-                                     fr.uploadedfileid,
-                                     fr.revisionid,
-                                     fr.updatedbyid,
-                                     fr.updatedon,
-                                     fr.trackname,
-                                     fr.albumname,
-                                     fr.artistnames,
-                                     fr.changesummary
-                                 FROM filerevisions fr
-                                 ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                             ),
-                             ratings AS (
-                                 SELECT uploadedfileid, SUM(score) AS rating
-                                 FROM ratings
-                                 GROUP BY uploadedfileid
-                             )
-                             SELECT uf.id,
-                                    uf.relativepath,
-                                    uf.hash,
-                                    uf.uploadedon,
-                                    uf.uploadedby AS uploadedbyid,
-                                    COALESCE(r.rating, 0) AS rating,
-                                    lr.revisionid,
-                                    lr.updatedbyid,
-                                    lr.updatedon,
-                                    lr.trackname,
-                                    lr.albumname,
-                                    lr.artistnames,
-                                    uf.originalname,
-                                    uf.filesize,
-                                    lr.changesummary,
-                                    uf.locked,
-                                    uf.downloads,
-                                    uf.plays
-                             FROM uploadedfiles uf
-                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                             ORDER BY {orderBy}
-                             OFFSET @Offset
-                             LIMIT @Limit;
+                         WITH latest_revisions AS (
+                             SELECT DISTINCT ON (fr.uploadedfileid)
+                                 fr.uploadedfileid,
+                                 fr.revisionid,
+                                 fr.updatedbyid,
+                                 fr.updatedon,
+                                 fr.trackname,
+                                 fr.albumname,
+                                 fr.artistnames,
+                                 fr.changesummary
+                             FROM filerevisions fr
+                             ORDER BY fr.uploadedfileid, fr.revisionid DESC
+                         ),
+                         ratings AS (
+                             SELECT uploadedfileid, SUM(score) AS rating
+                             FROM ratings
+                             GROUP BY uploadedfileid
+                         )
+                         SELECT uf.id,
+                                uf.relativepath,
+                                uf.hash,
+                                uf.uploadedon,
+                                uf.uploadedby AS uploadedbyid,
+                                COALESCE(r.rating, 0) AS rating,
+                                lr.revisionid,
+                                lr.updatedbyid,
+                                lr.updatedon,
+                                lr.trackname,
+                                lr.albumname,
+                                lr.artistnames,
+                                uf.originalname,
+                                uf.filesize,
+                                lr.changesummary,
+                                uf.locked,
+                                uf.downloads,
+                                uf.plays
+                         FROM uploadedfiles uf
+                         INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
+                         LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                         WHERE uf.deletedid IS NULL
+                         ORDER BY {orderBy}
+                         OFFSET @Offset
+                         LIMIT @Limit;
                          """;
         }
         else
@@ -158,7 +172,10 @@ public class FileRepository : IFileRepository
                            FROM filerevisions fr
                            WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
                        )
-                       SELECT COUNT(*) FROM search_results;
+                       SELECT COUNT(*)
+                       FROM search_results sr
+                       INNER JOIN uploadedfiles uf ON sr.uploadedfileid = uf.id
+                       WHERE uf.deletedid IS NULL;
                        """;
 
             searchSql = $"""
@@ -204,6 +221,7 @@ public class FileRepository : IFileRepository
                              FROM uploadedfiles uf
                              INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                              LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                             WHERE uf.deletedid IS NULL
                              ORDER BY {orderBy}
                              OFFSET @Offset
                              LIMIT @Limit;
@@ -273,6 +291,7 @@ public class FileRepository : IFileRepository
                       FROM uploadedfiles uf
                       INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                       LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                      WHERE uf.deletedid IS NULL
                       ORDER BY RANDOM()
                       LIMIT @Limit;
                       """;
@@ -322,6 +341,7 @@ public class FileRepository : IFileRepository
                            FROM uploadedfiles uf
                            INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                            LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                           WHERE uf.deletedid IS NULL
                            ORDER BY uf.uploadedon DESC
                            LIMIT 50;
                            """;
@@ -345,6 +365,7 @@ public class FileRepository : IFileRepository
                            SELECT Id
                            FROM UploadedFiles
                            WHERE Hash = @Sha
+                            AND deletedid IS NULL
                            LIMIT 1;
                            """;
 
@@ -433,7 +454,8 @@ public class FileRepository : IFileRepository
                            	       lr.changesummary,
                            	       uf.locked,
                                    uf.downloads,
-                                   uf.plays
+                                   uf.plays,
+                                   uf.deletedid
                            	       FROM uploadedfiles uf
                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
@@ -470,7 +492,8 @@ public class FileRepository : IFileRepository
                                       fr.description,
                                       uf.locked,
                                       uf.downloads,
-                                      uf.plays
+                                      uf.plays,
+                                      uf.deletedid
                                FROM uploadedfiles uf
                                INNER JOIN filerevisions fr 
                                    ON uf.id = fr.uploadedfileid AND fr.revisionid = @Revision
@@ -547,7 +570,8 @@ public class FileRepository : IFileRepository
             RelativePath = first.RelativePath,
             UploadedOn = first.UploadedOn,
             Id = first.Id,
-            UploadedById = first.UploadedById,
+            UploadedById = first.UploadedBy,
+            OriginalName = first.OriginalName
         };
     }
 
@@ -602,7 +626,8 @@ public class FileRepository : IFileRepository
     public async Task<Guid[]> GetAllIdsAsync()
     {
         const string sql = """
-                           SELECT id FROM uploadedfiles;
+                           SELECT id FROM uploadedfiles
+                           WHERE deletedid IS NULL;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -689,8 +714,9 @@ public class FileRepository : IFileRepository
                            FROM uploadedfiles uf
                            LEFT JOIN filepreviews fp 
                                   ON uf.id = fp.uploadedfileid
-                           WHERE fp.uploadedfileid IS NULL
-                              OR NOT (fp.supportedextensions @> @RequiredExtensions);
+                           WHERE (fp.uploadedfileid IS NULL
+                                  OR NOT (fp.supportedextensions @> @RequiredExtensions))
+                             AND uf.deletedid IS NULL;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -703,9 +729,12 @@ public class FileRepository : IFileRepository
     public async Task<Guid[]> GetFilesNeedingRegenerationAsync()
     {
         const string sql = """
-                           SELECT uploadedfileid
-                           FROM filepreviews
-                           WHERE array_length(regenerate, 1) > 0;
+                           SELECT uf.id
+                           FROM uploadedfiles uf
+                           INNER JOIN filepreviews fp
+                                   ON uf.id = fp.uploadedfileid
+                           WHERE array_length(fp.regenerate, 1) > 0
+                             AND uf.deletedid IS NULL;
                            """;
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -766,6 +795,89 @@ public class FileRepository : IFileRepository
         });
     }
 
+    public async Task<DeletionReason?> GetDeletionStatusAsync(Guid fileId)
+    {
+        const string sql = """
+                           SELECT d.reason
+                           FROM uploadedfiles uf
+                           INNER JOIN deletions d ON uf.deletedid = d.id
+                           WHERE uf.id = @FileId;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        return await con.QueryFirstOrDefaultAsync<DeletionReason?>(sql, new { FileId = fileId });
+    }
+
+    public async Task DeleteFile(Guid fileId, bool allowReupload, DeletionReason reason, Guid user)
+    {
+        const string deletionSql = """
+                                   INSERT INTO deletions (hash, allowreupload, reason, uploadedby, deletedby, deletiontime)
+                                   VALUES (@Hash, @AllowReupload, @Reason, @UploadedBy, @DeletedBy, @DeletionTime) RETURNING id;
+                                   """;
+
+        const string deletionReference = """
+                                         UPDATE uploadedfiles 
+                                         SET 
+                                            deletedid = @Id,
+                                            locked = true
+                                         WHERE id = @FileId;
+                                         """;
+
+        var fileExists = await FileExistsAsync(fileId);
+        if (!fileExists)
+            throw new InvalidOperationException($"File {fileId} does not exist");
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        await using var transaction = await con.BeginTransactionAsync();
+
+        var file = await GetUploadedFilePureAsync(fileId);
+
+        var deletionId = await con.ExecuteScalarAsync<int>(
+            deletionSql,
+            new
+            {
+                Hash = file!.Hash,
+                AllowReupload = allowReupload,
+                Reason = reason,
+                UploadedBy = file.UploadedById,
+                DeletedBy = user,
+                DeletionTime = DateTime.UtcNow
+            },
+            transaction: transaction
+        );
+
+        await con.ExecuteAsync(deletionReference, new
+        {
+            Id = deletionId,
+            FileId = file.Id,
+        }, transaction: transaction);
+
+        await transaction.CommitAsync();
+
+        await _moderationRepository.AddNotification(file.UploadedById, Severity.Generic,
+            NotificationType.ContentRemoved,
+            [
+                $"/{fileId}",
+                file.OriginalName,
+                reason.GetNotificationReason()
+            ]);
+    }
+
+    public async Task<bool> GetReuploadStatusForHash(string sha)
+    {
+        const string sql = """
+                           SELECT COUNT(*)
+                           FROM deletions
+                           WHERE hash = @Sha AND allowreupload = FALSE;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        var blockedCount = await con.ExecuteScalarAsync<int>(sql, new { Sha = sha });
+
+        // If there's at least one "no reupload" deletion we block reupload
+        return blockedCount == 0;
+    }
+
     // Private helper method
     private async Task<List<UploadedFile>> FetchUploadedFilesAsync(string sql, object? parameters = null)
     {
@@ -786,6 +898,7 @@ public class FileRepository : IFileRepository
             Locked = r.Locked,
             Downloads = r.Downloads,
             Plays = r.Plays,
+            DeletedId = r.DeletedId,
             FileRevisions = new List<FileRevision>
             {
                 new FileRevision
@@ -812,7 +925,8 @@ public class FileRepository : IFileRepository
         public string RelativePath { get; set; } = null!;
         public string Hash { get; set; } = null!;
         public DateTime UploadedOn { get; set; }
-        public Guid UploadedById { get; set; }
+        public Guid UploadedBy { get; set; }
+        public string OriginalName { get; set; } = null!;
     }
 
     private class UploadedFileRow
@@ -826,6 +940,7 @@ public class FileRepository : IFileRepository
         public bool Locked { get; set; }
         public int Downloads { get; set; }
         public int Plays { get; set; }
+        public int? DeletedId { get; set; }
 
         public int FileSize { get; set; }
         public string OriginalName { get; set; } = null!;
