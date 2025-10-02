@@ -48,7 +48,7 @@
 <script>
     async function dismiss(ticketId, button) {
         await fetch(`/notifications/${ticketId}/read`, {
-            method: "patch",
+            method: "PATCH",
         });
 
         button.remove();
