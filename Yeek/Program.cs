@@ -115,6 +115,23 @@ if (serverConfiguration.UseHttps)
 if (serverConfiguration.UseForwardedHeaders)
     app.UseForwardedHeaders();
 
+if (serverConfiguration.IsCloudflareProxy)
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Headers.TryGetValue("CF-Connecting-IP", out var cfConnectingIp))
+        {
+            if (System.Net.IPAddress.TryParse(cfConnectingIp, out var ip))
+            {
+                // TODO: Check if the IP is actually from cloudflares ranges. https://www.cloudflare.com/ips/
+                context.Connection.RemoteIpAddress = ip;
+            }
+        }
+
+        await next();
+    });
+}
+
 app.UseSerilogRequestLogging(o =>
 {
     o.GetLevel = HttpContextExtension.GetRequestLogLevel;

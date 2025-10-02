@@ -30,4 +30,5 @@ public class ServerConfiguration
     public string? PathBase { get; set; }
 
     public string? PlausibleSnippet { get; set; } = null;
+    public bool IsCloudflareProxy { get; set; } = false;
 }
