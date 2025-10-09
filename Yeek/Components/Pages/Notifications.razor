@@ -35,6 +35,9 @@
                 case NotificationType.TrustChanged:
                     <p>Your Trust Score was updated to @(((TrustLevel)int.Parse(notification.Payload[0])).ToString())</p>
                     break;
+                case NotificationType.MassEditReverted:
+                    <p>Your mass edit was reverted by a moderator. For more information, open a ticket.</p>
+                    break;
 
                 default:
                     throw new ArgumentOutOfRangeException();

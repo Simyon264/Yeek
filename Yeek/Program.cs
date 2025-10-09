@@ -10,6 +10,7 @@ using Yeek.Core;
 using Yeek.Core.Repositories;
 using Yeek.Database;
 using Yeek.FileHosting;
+using Yeek.FileHosting.JavaScript;
 using Yeek.FileHosting.Repositories;
 using Yeek.Security;
 using Yeek.Security.Repositories;
@@ -77,6 +78,8 @@ builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<ModerationService>();
 builder.Services.AddScoped<AdministrationService>();
 builder.Services.AddScoped<MidiService>();
+
+builder.Services.AddSingleton<ScriptService>();
 
 builder.Services.AddRazorComponents();
 builder.Services.AddHttpContextAccessor();

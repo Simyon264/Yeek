@@ -50,4 +50,5 @@ public enum NotificationType : byte
     ContentRemoved = 2,
     Banned = 3,
     TrustChanged = 4,
+    MassEditReverted = 5,
 }

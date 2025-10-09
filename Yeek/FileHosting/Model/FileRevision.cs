@@ -39,4 +39,27 @@ public class FileRevision
     /// What did this change do?
     /// </summary>
     public string ChangeSummary { get; set; } = null!;
+
+    public string GetDiff(FileRevision other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        var diffs = new List<string>();
+
+        if (TrackName != other.TrackName)
+            diffs.Add($"TrackName: \"{other.TrackName}\" > \"{TrackName}\"");
+
+        if (AlbumName != other.AlbumName)
+            diffs.Add($"AlbumName: \"{other.AlbumName ?? "null"}\" > \"{AlbumName ?? "null"}\"");
+
+        if (!ArtistNames.SequenceEqual(other.ArtistNames))
+            diffs.Add($"ArtistNames: [{string.Join(", ", other.ArtistNames)}] > [{string.Join(", ", ArtistNames)}]");
+
+        if (Description != other.Description)
+            diffs.Add($"Description: \"{other.Description ?? "null"}\" > \"{Description ?? "null"}\"");
+
+        return diffs.Count == 0
+            ? "No content changes."
+            : string.Join('\n', diffs);
+    }
 }

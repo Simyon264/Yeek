@@ -5,3 +5,7 @@ riderModule.iml
 /_ReSharper.Caches/
 appsettings.Secret.yml
 data/
+node_modules
+.build-stamp
+/Yeek/wwwroot/interop.bundle.js
+stats.html

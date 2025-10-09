@@ -13,9 +13,27 @@ public interface IFileRepository
 
     public Task<(bool foundMatch, Guid? fileId)> FindFileByShaAsync(string sha);
     public Task UploadFileAsync(UploadedFile uploadedFile, FileRevision fileRevision);
-
+    public Task<List<ScriptHistory>> GetExecutedScriptsAsync();
     public Task<UploadedFile> GetUploadedFileAsync(Guid fileId);
     public Task<UploadedFile> GetUploadedFileWithSpecificRevisionAsync(Guid fileId, int revision);
+    /// <summary>
+    /// Gets all uploaded files with all of their revisions.
+    /// The returned files are limited in properties, the following isn't included on the files:
+    /// - Rating
+    /// - Locked
+    /// - Downloads
+    /// - Plays
+    /// - DeletedId (deleted files are not included in the search)
+    /// - Hash
+    /// - RelativePath
+    /// - Original Name
+    /// The following isn't included in the file revisions
+    /// - UploadedFileId
+    /// </summary>
+    public Task<List<UploadedFile>> GetAllUploadedFilesAsync();
+    public Task RevertMassEdit(Guid massEditId, Guid user);
+    public Task<SummarizedRevision?> GetMassEditOrNull(Guid massEditId);
+    public Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, string script, Guid editId, bool apply);
 
     public Task<List<SummarizedRevision>> GetRevisionsAsync(Guid fileId);
     /// <summary>
@@ -63,6 +81,6 @@ public class SummarizedRevision
 {
     public int RevisionId { get; set; }
     public DateTime UpdatedOn { get; set; }
-    public string ChangeSummary { get; set; }
-    public User UpdatedBy { get; set; }
+    public string ChangeSummary { get; set; } = string.Empty;
+    public User UpdatedBy { get; set; } = null!;
 }

@@ -9,6 +9,11 @@ public static class FileHostingExtensions
 {
     public static void UseFileHosting(this WebApplication app)
     {
+        app.MapPost("/moderation/mass-edits/{fileId:guid}/revert",
+                async (Guid fileId, ClaimsPrincipal user, FileService fileService)
+                    => await fileService.RevertMassEdit(fileId, user))
+            .RequireAuthorization();
+
         app.MapPost("/upload/midi",
                 async (ClaimsPrincipal user, FileService fileService, HttpContext context, IAntiforgery antiforgery,
                     [FromForm] MidiUploadForm form) =>
@@ -86,5 +91,13 @@ public static class FileHostingExtensions
             async (FileService fileService, ClaimsPrincipal user, [FromQuery] int score, [FromQuery] Guid file)
                 => await fileService.VoteAsResult(score, file, user))
             .RequireRateLimiting("VotePolicy");
+
+        app.MapPost("/mass-edit/start", async ([FromQuery] bool apply, FileService fileService, ClaimsPrincipal user, HttpRequest req)
+                => await fileService.StartMassEditJob(user, req, apply))
+            .RequireAuthorization();
+
+        app.MapGet("/mass-edit/stream/{jobId:guid}", async (FileService fileService, HttpContext req, Guid jobId)
+            => await fileService.GetMassJobStream(req, jobId))
+            .RequireAuthorization();
     }
 }

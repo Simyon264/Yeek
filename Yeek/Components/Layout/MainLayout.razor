@@ -42,6 +42,12 @@
                 <div class="link">
                     <a href="/upload">Upload MIDI</a>
                 </div>
+                @if (User.TrustLevel >= TrustLevel.Trusted)
+                {
+                    <div class="link">
+                        <a href="/mass-edit">TRUSTED: Mass Edit</a>
+                    </div>
+                }
                 <div class="link">
                     <a href="/logout">Logout?</a>
                 </div>
@@ -77,6 +83,12 @@
                     <a href="/moderation/report/new">Create Ticket</a>
                 </div>
 
+                @if (User.TrustLevel >= TrustLevel.Moderator)
+                {
+                    <div class="link">
+                        <a href="/moderation/mass-edits">MOD: Mass Edit History</a>
+                    </div>
+                }
                 @if (User.TrustLevel >= TrustLevel.Moderator)
                 {
                     <div class="link">

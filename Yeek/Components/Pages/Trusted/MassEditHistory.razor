@@ -1,0 +1,75 @@
+﻿@page "/moderation/mass-edits"
+@using System.Globalization
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+
+<h3>Mass Edits</h3>
+<PageTitle>Yeek - MOD: Mass Edits</PageTitle>
+
+@if (User == null || User.TrustLevel < TrustLevel.Moderator)
+{
+    <p class="error-text">nuh uh</p>
+    return;
+}
+
+
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Was Applied</th>
+        <th>Affected Count</th>
+        <th>User</th>
+        <th>Executed On</th>
+        <th>Actions</th>
+    </tr>
+    @foreach (var script in _scripts)
+    {
+        <tr>
+            <td>@script.Id</td>
+            <td>@script.WasApplied</td>
+            <td>@script.Affected</td>
+            <td>@script.RunBy</td>
+            <td>@script.ExecutedOn.ToString("F", CultureInfo.InvariantCulture)</td>
+            <td>
+                <button onclick="revert('@script.Id')">Revert</button>
+            </td>
+        </tr>
+    }
+</table>
+
+<script>
+    async function revert(scriptId) {
+        try {
+            const resp = await fetch(`/moderation/mass-edits/${scriptId}/revert`, {
+                method: "POST",
+            });
+
+            if (resp.status != 200) {
+                alert("Could not revert");
+            } else {
+                location.reload();
+            }
+        } catch (e) {
+            alert(`Could not revert revert ${e}`);
+        }
+    }
+</script>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    [Inject]
+    private IFileRepository FileRepository { get; set; } = null!;
+
+    private List<ScriptHistory> _scripts = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null || User.TrustLevel < TrustLevel.Moderator)
+            return;
+
+        _scripts = await FileRepository.GetExecutedScriptsAsync();
+    }
+}

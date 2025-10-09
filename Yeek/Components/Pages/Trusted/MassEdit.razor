@@ -1,0 +1,259 @@
+﻿@page "/mass-edit"
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.Security.Model
+
+@attribute [Authorize]
+
+<h3>Mass Edit</h3>
+<PageTitle>Yeek - Mass Edit</PageTitle>
+
+@if (User == null || User.TrustLevel < TrustLevel.Trusted)
+{
+    <p class="error-text">You must be trusted in order to mass edit.</p>
+    return;
+}
+
+<p>Mass Editing allows you to edit the meta data of files that match a given input. This is a dangerous method and as such please be careful when using it.</p>
+<b>Abuse of this tool is not permitted and will result in a ban.</b>
+
+<details>
+  <summary>JavaScript reference</summary>
+
+  <p>
+    Your script runs in a sandboxed ClearScript environment with access to the <code>context</code> object and a simple logging API.
+  </p>
+
+  <h4>Logging</h4>
+  <pre><code>
+// Output informational messages
+log.info("Something happened");
+
+// Output errors
+log.error("Something went wrong");
+  </code></pre>
+
+  <h4>Context</h4>
+  <p>
+    The <code>context</code> object exposes methods and objects for interacting with the site.
+  </p>
+
+  <pre><code>
+/**
+ * Returns an array of all uploaded files (including all revisions).
+ * Each item is a JsFile instance.
+ */
+const files = await context.GetAllFiles();
+
+/**
+ * Returns a specific user by ID as a JsUser object.
+ */
+const user = await context.GetUser(userId);
+  </code></pre>
+
+  <h4>JsFile</h4>
+  <p>Represents a file uploaded by a user.</p>
+  <pre><code>
+{
+  Id: Guid,
+  FileSize: number,
+  UploadedOn: Date,
+  UploadedBy: JsUser,
+  Revisions: JsRevision[]
+}
+
+/**
+ * Queues a metadata update for this file.
+ * Changes are applied after the script finishes executing.
+ */
+file.SetInfo(
+  name,            // string, required
+  albumName,       // string | null
+  artistNames,     // string[] (JS array)
+  description,     // string | null
+  changeSummary,   // string, required
+  allowOverwrite   // boolean, optional
+);
+  </code></pre>
+
+  <h4>JsRevision</h4>
+  <p>Represents a specific revision of a file.</p>
+  <pre><code>
+{
+  RevisionNumber: number,
+  User: JsUser,
+  UpdatedAt: Date,
+  TrackName: string,
+  AlbumName: string | null,
+  ArtistNames: string[],
+  Description: string | null,
+  ChangeSummary: string
+}
+  </code></pre>
+
+  <h4>JsUser</h4>
+  <p>Represents a site user.</p>
+  <pre><code>
+{
+  UserId: Guid,
+  Name: string,
+  TrustLevel: number
+}
+  </code></pre>
+
+  <h4>Updates</h4>
+  <p>
+    Any call to <code>file.SetInfo(...)</code> queues a change in <code>context.Updates</code>.
+    Once the script finishes, all queued changes will be processed (or previewed in dry-run mode).
+  </p>
+
+  <h4>Example script</h4>
+  <pre><code>
+// This function is called automatically.
+async function run() {
+  let allFiles = await context.GetAllFiles();
+  await log.info(`All files count: ${allFiles.length}`)
+  for (let i = 0; i &lt; allFiles.length; i++) {
+    const file = allFiles[i];
+    const latestRev = file.Revisions[0];
+    if (latestRev.AlbumName !== "Outer Wilds OST")
+      continue;
+
+    file.SetInfo(latestRev.TrackName,
+                "Outer Wilds Original Soundtrack",
+                 latestRev.ArtistNames,
+                 latestRev.Description,
+                 "Renamed OST to Original Soundtrack"
+                );
+  }
+  return 0;
+};
+  </code></pre>
+
+</details>
+
+
+<div id="mass-edit-editor" class="editor"></div>
+
+<small>Running will first result in a "dry run". No actual data will be changed. Use this to confirm your selections are working.</small>
+<div>
+    <button id="runbutton" onclick="run(false)">Run</button>
+    <button id="runapplybutton" onclick="run(true)">Run & Apply Changes</button>
+</div>
+<div id="results" class="mass-edit-results">
+
+</div>
+
+<script src="@Assets["/interop.bundle.js"]"></script>
+<script>
+    let view = window.initializeEditor("mass-edit-editor");
+    let runButton = document.getElementById("runbutton");
+    let runApplyButton = document.getElementById("runapplybutton");
+    let results = document.getElementById("results");
+    let source = null;
+    let isRunning = false;
+    let hasError = false;
+
+    runApplyButton.disabled = true;
+
+    view.dispatch = ((origDispatch) => {
+        return (tr) => {
+            if (tr.docChanged) {
+                runApplyButton.disabled = true;
+            }
+            origDispatch(tr);
+        };
+    })(view.dispatch);
+
+    async function run(apply) {
+        if (isRunning)
+            return;
+        isRunning = true;
+        runButton.disabled = true;
+        runApplyButton.disabled = true;
+        results.innerHTML = "";
+        hasError = false;
+
+        try {
+            const resp = await fetch(`/mass-edit/start?apply=${apply}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: view.state?.doc?.toString()
+            });
+            const jobId = await resp.text();
+
+            source = new EventSource(`/mass-edit/stream/${jobId}`);
+            let messageQueue = [];
+
+            source.onmessage = e => {
+                if (e.data === "[[END]]") {
+                    appendToConsole("[OK] Finished.");
+
+                    // Only enable apply if no errors occurred
+                    if (!hasError) {
+                        runApplyButton.disabled = false;
+                    }
+
+                    cleanup();
+                } else {
+                    if (e.data === "[[NEXT]]") {
+                        const combined = messageQueue.join("\n");
+                        appendToConsole(combined);
+
+                        // If any of the queued messages contain errors, mark hasError
+                        if (combined.includes("[ERROR]")) {
+                            hasError = true;
+                        }
+
+                        messageQueue = [];
+                    } else {
+                        messageQueue.push(e.data);
+                    }
+                }
+            };
+
+            source.onerror = err => {
+                appendToConsole("[ERROR] Connection closed or failed.");
+                hasError = true;
+                cleanup();
+            };
+
+        } catch (err) {
+            appendToConsole("[ERROR] Failed to start job: " + err);
+            hasError = true;
+            cleanup();
+        }
+    }
+
+    function appendToConsole(text) {
+        let div = document.createElement("div");
+
+        // classify based on prefix or pattern
+        if (text.startsWith("[INFO]")) {
+            div.className = "info";
+        } else if (text.startsWith("[ERROR]")) {
+            div.className = "error";
+        } else if (text.startsWith("[WARN]")) {
+            div.className = "warn";
+        } else if (text.startsWith("[OK]")) {
+            div.className = "success";
+        }
+
+        div.textContent = text;
+        results.appendChild(div);
+        results.scrollTop = results.scrollHeight; // auto-scroll
+    }
+
+    function cleanup() {
+        if (source) {
+            source.close();
+            source = null;
+        }
+        isRunning = false;
+        runButton.disabled = false;
+    }
+</script>
+
+@code {
+    [CascadingParameter]
+    public User? User { get; set; }
+}

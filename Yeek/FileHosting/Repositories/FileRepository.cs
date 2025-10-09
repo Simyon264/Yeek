@@ -414,6 +414,28 @@ public class FileRepository : IFileRepository
         }
     }
 
+    public async Task<List<ScriptHistory>> GetExecutedScriptsAsync()
+    {
+        const string sql = """
+                           SELECT 
+                               sh.id,
+                               sh.wasapplied,
+                               sh.runby,
+                               sh.executedon,
+                               COUNT(fr.uploadedfileid) AS affected
+                           FROM scripthistory sh
+                           LEFT JOIN filerevisions fr
+                               ON fr.scripthistoryid = sh.id
+                           -- WHERE sh.wasapplied = TRUE
+                           GROUP BY sh.id, sh.wasapplied, sh.runby, sh.executedon
+                           ORDER BY sh.executedon DESC;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        var result = await con.QueryAsync<ScriptHistory>(sql);
+        return result.ToList();
+    }
+
     public async Task<UploadedFile> GetUploadedFileAsync(Guid fileId)
     {
         const string sql = """
@@ -516,6 +538,260 @@ public class FileRepository : IFileRepository
         }
 
         return file;
+    }
+
+    public async Task<List<UploadedFile>> GetAllUploadedFilesAsync()
+    {
+        const string sql = """
+                           WITH all_revisions AS (
+                               SELECT fr.uploadedfileid,
+                                      fr.revisionid,
+                                      fr.updatedbyid,
+                                      fr.updatedon,
+                                      fr.trackname,
+                                      fr.albumname,
+                                      fr.artistnames,
+                                      fr.description,
+                                      fr.changesummary
+                               FROM filerevisions fr
+                           )
+                           SELECT uf.id,
+                                  lr.revisionid,
+                                  lr.updatedbyid,
+                                  lr.updatedon,
+                                  lr.trackname,
+                                  lr.albumname,
+                                  lr.artistnames,
+                                  lr.description,
+                                  lr.changesummary
+                           FROM uploadedfiles uf
+                           INNER JOIN all_revisions lr ON uf.id = lr.uploadedfileid
+                           WHERE uf.deletedid IS NULL
+                           ORDER BY uf.id, lr.revisionid ASC;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+
+        var rows = await con.QueryAsync<UploadedFileRow>(sql);
+
+        // Group revisions by file
+        var grouped = rows.GroupBy(r => r.Id);
+
+        var result = grouped.Select(g => new UploadedFile
+        {
+            Id = g.Key,
+            Hash = string.Empty,
+            RelativePath = string.Empty,
+            FileRevisions = g.Select(r => new FileRevision
+            {
+                RevisionId = r.RevisionId,
+                UpdatedById = r.UpdatedById,
+                UpdatedOn = r.UpdatedOn,
+                TrackName = r.TrackName,
+                AlbumName = r.AlbumName,
+                ArtistNames = r.ArtistNames,
+                Description = r.Description ?? string.Empty,
+                ChangeSummary = r.ChangeSummary,
+            }).ToList()
+        }).ToList();
+
+        return result;
+    }
+
+    public async Task RevertMassEdit(Guid massEditId, Guid user)
+    {
+        const string getHistorySql = """
+                                      SELECT id, wasapplied, runby
+                                      FROM scripthistory
+                                      WHERE id = @Id;
+                                      """;
+
+        const string getAffectedFilesSql = """
+                                           SELECT DISTINCT uploadedfileid, revisionid
+                                           FROM filerevisions
+                                           WHERE scripthistoryid = @Id
+                                           ORDER BY uploadedfileid, revisionid DESC;
+                                           """;
+
+        const string getPreviousRevisionSql = """
+                                              SELECT uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames, description, changesummary
+                                              FROM filerevisions
+                                              WHERE uploadedfileid = @FileId AND revisionid < @RevisionId
+                                              ORDER BY revisionid DESC
+                                              LIMIT 1;
+                                              """;
+
+        const string insertHistorySql = """
+                                         INSERT INTO scripthistory (id, wasapplied, script, runby, executedon)
+                                         VALUES (@Id, @WasApplied, @Script, @RunBy, @ExecutedOn);
+                                         """;
+
+        const string insertRevisionSql = """
+                                         INSERT INTO filerevisions
+                                         (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames, description, changesummary, scripthistoryid)
+                                         VALUES (@UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn, @TrackName, @AlbumName, @ArtistNames, @Description, @ChangeSummary, @HistoryId);
+                                         """;
+
+        const string nextRevisionSql = """
+                                       SELECT MAX(revisionid) FROM filerevisions WHERE uploadedfileid = @FileId;
+                                       """;
+
+        const string updateOriginalHistorySql = """
+                                                 UPDATE scripthistory SET wasapplied = FALSE WHERE id = @Id;
+                                                 """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        await using var transaction = await con.BeginTransactionAsync();
+
+        var historyRow = await con.QueryFirstOrDefaultAsync(getHistorySql, new { Id = massEditId }, transaction: transaction);
+        if (historyRow == null)
+            throw new InvalidOperationException("Mass edit does not exist");
+
+        var wasApplied = (bool)historyRow.wasapplied;
+        var originalRunBy = (Guid)historyRow.runby;
+
+        if (!wasApplied)
+            throw new InvalidOperationException("Mass edit has not been applied or has already been reverted.");
+
+        var affectedRows = (await con.QueryAsync(getAffectedFilesSql, new { Id = massEditId }, transaction: transaction)).ToList();
+        var affected = affectedRows.Select(r => ((Guid)r.uploadedfileid, (int)r.revisionid)).ToList();
+
+        var newHistoryId = Guid.CreateVersion7();
+        await con.ExecuteAsync(insertHistorySql, new
+        {
+            Id = newHistoryId,
+            WasApplied = true,
+            Script = $"// REVERT OF {massEditId}",
+            RunBy = user,
+            ExecutedOn = DateTime.UtcNow
+        }, transaction: transaction);
+
+        foreach (var group in affected.GroupBy(a => a.Item1))
+        {
+            var fileId = group.Key;
+            var massRevisionId = group.Max(g => g.Item2);
+
+            var prev = await con.QueryFirstOrDefaultAsync<FileRevision>(getPreviousRevisionSql, new { FileId = fileId, RevisionId = massRevisionId }, transaction: transaction);
+            if (prev == null)
+            {
+                continue;
+            }
+
+            var nextRevisionId = await con.ExecuteScalarAsync<int?>(nextRevisionSql, new { FileId = fileId }, transaction: transaction) ?? 0;
+            nextRevisionId++;
+
+            await con.ExecuteAsync(insertRevisionSql, new
+            {
+                UploadedFileId = fileId,
+                RevisionId = nextRevisionId,
+                UpdatedById = user,
+                UpdatedOn = DateTime.UtcNow,
+                TrackName = prev.TrackName,
+                AlbumName = prev.AlbumName,
+                ArtistNames = prev.ArtistNames,
+                Description = prev.Description ?? string.Empty,
+                ChangeSummary = $"Reverted mass edit {massEditId}",
+                HistoryId = newHistoryId
+            }, transaction: transaction);
+        }
+
+        // mark original history as not applied
+        await con.ExecuteAsync(updateOriginalHistorySql, new { Id = massEditId }, transaction: transaction);
+
+        await transaction.CommitAsync();
+
+        try
+        {
+            await _moderationRepository.AddNotification(originalRunBy, Severity.Generic, NotificationType.MassEditReverted,
+                [massEditId.ToString()]);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send revert notification for mass edit {MassEditId}", massEditId);
+        }
+    }
+
+    public async Task<SummarizedRevision?> GetMassEditOrNull(Guid massEditId)
+    {
+        const string sql = """
+                        SELECT sh.executedon AS UpdatedOn, sh.script AS ChangeSummary,
+                               u.id AS Id, u.displayname AS DisplayName, u.trustlevel AS TrustLevel
+                        FROM scripthistory sh
+                        INNER JOIN users u ON sh.runby = u.id
+                        WHERE sh.id = @Id;
+                        """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+
+        var result = await con.QueryAsync<SummarizedRevision, User, SummarizedRevision>(
+            sql,
+            (rev, user) =>
+            {
+                rev.UpdatedBy = user;
+                return rev;
+            },
+            new { Id = massEditId },
+            splitOn: "Id"
+        );
+
+        return result.FirstOrDefault();
+    }
+
+    public async Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, string script, Guid editId, bool apply)
+    {
+        const string nextRevisionSql = """
+                                       SELECT MAX(revisionid)
+                                       FROM filerevisions
+                                       WHERE uploadedfileid = @FileId;
+                                       """;
+        const string insertRevisionSql = """
+                                 INSERT INTO filerevisions 
+                                 (uploadedfileid, revisionid, updatedbyid, updatedon, trackname, albumname, artistnames, description, changesummary, scripthistoryid)
+                                 VALUES (@UploadedFileId, @RevisionId, @UpdatedById, @UpdatedOn, @TrackName, @AlbumName, @ArtistNames, @Description, @ChangeSummary, @HistoryId);
+                                 """;
+
+        const string insertEdit = """
+                                  INSERT INTO scripthistory
+                                  (id, wasapplied, script, runby, executedon)
+                                  VALUES (@Id, @WasApplied, @Script, @RunBy, @ExecutedOn);
+                                  """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        await using var transaction = await con.BeginTransactionAsync();
+
+        await con.ExecuteAsync(insertEdit, new
+        {
+            Id = editId,
+            WasApplied = apply,
+            Script = script,
+            RunBy = user,
+            ExecutedOn = DateTime.UtcNow,
+        }, transaction);
+
+        if (apply)
+        {
+            foreach (var (fileId, revision) in revisions)
+            {
+                var nextRevisionId = await con.ExecuteScalarAsync<int?>(nextRevisionSql, new { FileId = fileId }) ?? 0;
+                nextRevisionId++; // increment for the new revision
+
+                await con.ExecuteAsync(insertRevisionSql, new
+                {
+                    UploadedFileId = fileId,
+                    RevisionId = nextRevisionId,
+                    UpdatedById = revision.UpdatedById,
+                    UpdatedOn = revision.UpdatedOn,
+                    TrackName = revision.TrackName,
+                    AlbumName = revision.AlbumName,
+                    ArtistNames = revision.ArtistNames,
+                    Description = revision.Description ?? string.Empty,
+                    ChangeSummary = revision.ChangeSummary,
+                    HistoryId = editId
+                }, transaction);
+            }
+        }
+
+        await transaction.CommitAsync();
     }
 
     public async Task<List<SummarizedRevision>> GetRevisionsAsync(Guid fileId)
@@ -950,7 +1226,7 @@ public class FileRepository : IFileRepository
         public DateTime UpdatedOn { get; set; }
         public string TrackName { get; set; } = null!;
         public string? AlbumName { get; set; }
-        public string[] ArtistNames { get; set; }
+        public string[] ArtistNames { get; set; } = [];
         public string? Description { get; set; }
 
         public string ChangeSummary { get; set; } = null!;

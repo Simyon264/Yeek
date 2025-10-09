@@ -979,3 +979,42 @@ a.nametag[trust="Admin"] {
 .notifications-page-dismiss:active {
     transform: scale(0.95);
 }
+
+.mass-edit-results {
+    background-color: #1e1e1e;
+    color: #dcdcdc;
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #333;
+    height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+.mass-edit-results .info {
+    color: #4fc3f7;
+}
+
+.mass-edit-results .error {
+    color: #ef5350;
+    font-weight: bold;
+}
+
+.mass-edit-results .success {
+    color: #81c784;
+}
+
+.mass-edit-results .warn {
+    color: #ffb74d;
+}
+
+pre {
+    background:#1e1e1e;
+    color:#dcdcdc;
+    padding:10px;
+    border-radius:6px;
+    overflow:auto;
+}

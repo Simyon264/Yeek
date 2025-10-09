@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Net.Http.Headers;
 using TickerQ.Utilities.Base;
 using Yeek.Configuration;
+using Yeek.FileHosting.JavaScript;
 using Yeek.FileHosting.Model;
 using Yeek.FileHosting.Repositories;
 using Yeek.Security;
@@ -18,16 +19,20 @@ public class FileService
     private readonly IFileRepository _fileRepository;
     private readonly IUserRepository _userRepository;
     private readonly FileConfiguration _fileConfiguration = new();
+    private readonly JavaScriptConfiguration _javaScriptConfiguration = new();
     private readonly ILogger<FileService> _logger;
     private readonly WebDavManager _webDavManager;
+    private readonly ScriptService _scriptService;
 
-    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository)
+    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository, ScriptService scriptService)
     {
         _logger = logger;
         _fileRepository = context;
         _webDavManager = webDavManager;
         _userRepository = userRepository;
+        _scriptService = scriptService;
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
+        configuration.Bind(JavaScriptConfiguration.Name, _javaScriptConfiguration);
     }
 
     public async Task<IResult> DeleteFile(ClaimsPrincipal user, DeletionForm deletionForm)
@@ -288,6 +293,75 @@ public class FileService
         }
 
         return Results.Ok();
+    }
+
+    public async Task<IResult> RevertMassEdit(Guid massEditId, ClaimsPrincipal user)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+
+        var userObject = await _userRepository.GetUserAsync(userId.Value);
+        if (userObject.TrustLevel < TrustLevel.Moderator)
+            return Results.Forbid();
+
+        if (await _fileRepository.GetMassEditOrNull(massEditId) == null)
+            return Results.NotFound();
+
+        await _fileRepository.RevertMassEdit(massEditId, userId.Value);
+
+        return Results.Ok();
+    }
+
+    public async Task GetMassJobStream(HttpContext ctx, Guid jobId)
+    {
+        if (ScriptService.Jobs.TryGetValue(jobId, out var job))
+        {
+            ctx.Response.Headers.ContentType = "text/event-stream";
+
+            await foreach (var line in job.Channel.Reader.ReadAllAsync(ctx.RequestAborted))
+            {
+                var safeLine = line
+                    .Replace("\r\n", "\n")
+                    .Split('\n', StringSplitOptions.None)
+                    .Select(l => $"data: {l}")
+                    .Aggregate((a, b) => $"{a}\n{b}");
+
+                await ctx.Response.WriteAsync($"{safeLine}\n\n");
+                await ctx.Response.WriteAsync("data: [[NEXT]]\n\n");
+                await ctx.Response.Body.FlushAsync();
+            }
+
+            await ctx.Response.WriteAsync("data: [[END]]\n\n");
+            await ctx.Response.Body.FlushAsync();
+        }
+        else
+        {
+            ctx.Response.StatusCode = 404;
+        }
+    }
+
+    public async Task<IResult> StartMassEditJob(ClaimsPrincipal user, HttpRequest req, bool apply)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+
+        if (!_javaScriptConfiguration.Enable)
+            return Results.BadRequest("JavaScript is not enabled.");
+
+        var userObject = await _userRepository.GetUserAsync(userId.Value);
+        if (userObject.TrustLevel < _javaScriptConfiguration.RequiredTrust)
+            return Results.Forbid();
+
+        using var reader = new StreamReader(req.Body);
+        var body = await reader.ReadToEndAsync();
+        if (body.Length > _javaScriptConfiguration.AllowedCharacters)
+            return Results.BadRequest("Exceeded maximum allowed characters.");
+
+        var jobId = _scriptService.StartJob(body, userId.Value, apply);
+
+        return Results.Text(jobId.ToString(), statusCode: 202);
     }
 
     private static string CalculateHash(MemoryStream stream)
