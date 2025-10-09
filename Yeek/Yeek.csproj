@@ -43,6 +43,8 @@
       <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
       <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.8" />
       <PackageReference Include="Microsoft.ClearScript.V8" Version="7.5.0" />
+      <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-arm64" Version="7.5.0" />
+      <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-x64" Version="7.5.0" />
       <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.5.0" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="9.0.8" />
       <PackageReference Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
