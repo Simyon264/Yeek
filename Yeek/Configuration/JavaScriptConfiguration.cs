@@ -12,5 +12,5 @@ public class JavaScriptConfiguration
     /// <summary>
     /// Allowed characters for a js script.
     /// </summary>
-    public long AllowedCharacters { get; set; } = 4096;
+    public long AllowedCharacters { get; set; } = 4096 * 4;
 }

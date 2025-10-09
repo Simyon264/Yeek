@@ -212,7 +212,7 @@ async function run() {
             };
 
             source.onerror = err => {
-                appendToConsole("[ERROR] Connection closed or failed.");
+                appendToConsole("[ERROR] Connection closed or failed: " + err);
                 hasError = true;
                 cleanup();
             };
