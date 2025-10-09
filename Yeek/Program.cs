@@ -59,7 +59,6 @@ builder.Logging.AddSerilog();
 //Systemd Support
 builder.Host.UseSystemd();
 
-
 #endregion
 
 #region Database
@@ -145,6 +144,7 @@ app.UseSerilogRequestLogging(o =>
 });
 
 app.UseAuthentication();
+app.UseStaticFiles();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>();
