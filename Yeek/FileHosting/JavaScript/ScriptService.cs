@@ -12,6 +12,7 @@ namespace Yeek.FileHosting.JavaScript;
 public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory serviceScopeFactory)
 {
     public static readonly ConcurrentDictionary<Guid, Job> Jobs = new();
+    private static readonly SemaphoreSlim Lock = new SemaphoreSlim(1, 1);
 
     /// <summary>
     /// Starts a script Job, returning its ID.
@@ -32,6 +33,11 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
     {
         if (Jobs.IsEmpty)
             return;
+
+        if (!await Lock.WaitAsync(0, token)) // try to acquire lock without waiting
+        {
+            return;
+        }
 
         // https://github.com/nuskey8/luau-dotnet (tried, currently has compilation issues)
         // https://www.moonsharp.org/ (tried, no good async interop support)
@@ -70,12 +76,7 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
                         error = new Func<string, Task>(async msg => { await job.Channel.Writer.WriteAsync($"[ERROR] {msg}"); })
                     };
 
-                    var context = new ScriptContext(dbContext, serviceScopeFactory, engine);
-
-                    engine.AddHostObject("log", logger);
-                    engine.AddHostObject("context", context);
-
-                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                     reg = timeoutCts.Token.Register(() =>
                     {
                         try
@@ -88,8 +89,15 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
                         }
                     });
 
+
+                    var context = new ScriptContext(dbContext, serviceScopeFactory, engine, timeoutCts.Token);
+
+                    engine.AddHostObject("log", logger);
+                    engine.AddHostObject("context", context);
+
                     try
                     {
+                        await job.Channel.Writer.WriteAsync("[OK] Executing job", token);
                         engine.Execute(job.Code);
 
                         if (engine.Script.run is not null)
@@ -103,6 +111,7 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
                             }
                             catch (ScriptEngineException ex)
                             {
+                                timeoutCts.Token.ThrowIfCancellationRequested();
                                 await job.Channel.Writer.WriteAsync($"[ERROR] {ex.Message}", token);
                             }
                         }
@@ -111,7 +120,7 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
                             await job.Channel.Writer.WriteAsync("[ERROR] No async function 'run' found.", token);
                         }
                     }
-                    catch (ScriptInterruptedException)
+                    catch (OperationCanceledException)
                     {
                         await job.Channel.Writer.WriteAsync("[WARN] Script execution timed out.", token);
                     }
@@ -149,6 +158,8 @@ public class ScriptService(ApplicationDbContext dbContext, IServiceScopeFactory 
             {
                 Jobs.TryRemove(guid, out _);
             }
+
+            Lock.Release();
         }
     }
 }

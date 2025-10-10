@@ -21,12 +21,61 @@ public class ScriptContext
     private readonly Dictionary<Guid, JsFile> _fileCache = [];
     internal readonly Dictionary<Guid, QueuedUpdate> Updates = [];
     private bool _isRunningGetAllFiles = false;
+    private readonly CancellationToken _token;
 
-    internal ScriptContext(ApplicationDbContext dbContext, IServiceScopeFactory serviceScopeFactory, ScriptEngine engine)
+    internal ScriptContext(ApplicationDbContext dbContext, IServiceScopeFactory serviceScopeFactory,
+        ScriptEngine engine, CancellationToken timeoutCtsToken)
     {
         _dbContext = dbContext;
         _serviceScopeFactory = serviceScopeFactory;
         _engine = engine;
+        _token = timeoutCtsToken;
+    }
+
+    [UsedImplicitly]
+    public async Task<object> QueryForFiles(string search)
+    {
+        if (_isRunningGetAllFiles)
+            throw new InvalidOperationException("QueryForFiles must be awaited.");
+
+        if (string.IsNullOrWhiteSpace(search))
+            throw new ArgumentNullException(nameof(search));
+
+        _isRunningGetAllFiles = true;
+
+        using var scope = _serviceScopeFactory.CreateScope();
+        var fileRepo = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+
+        var files = await fileRepo.SearchAsync(search, SearchMode.Relevance, 0, int.MaxValue, true);
+        var result = new List<object>();
+
+        foreach (var uploadedFile in files.result)
+        {
+            _token.ThrowIfCancellationRequested();
+
+            if (_fileCache.TryGetValue(uploadedFile.Id, out JsFile? value))
+            {
+                result.Add(value);
+                continue;
+            }
+
+            var file = new JsFile(uploadedFile, await GetUserPrivateAsync(uploadedFile.UploadedById, userRepo), this);
+
+            var revisionsWithUsers = await Task.WhenAll(
+                uploadedFile.FileRevisions
+                    .OrderByDescending(x => x.RevisionId)
+                    .Select(async x =>
+                        new JsRevision(x, await GetUserPrivateAsync(x.UpdatedById, userRepo), _engine)));
+
+            file.Revisions = revisionsWithUsers.ToScriptArray(_engine);
+
+            _fileCache[uploadedFile.Id] = file;
+            result.Add(file);
+        }
+
+        _isRunningGetAllFiles = false;
+        return result.ToArray().ToScriptArray(_engine);
     }
 
     /// <summary>
@@ -53,6 +102,8 @@ public class ScriptContext
 
         foreach (var uploadedFile in files)
         {
+            _token.ThrowIfCancellationRequested();
+
             var file = new JsFile(uploadedFile, await GetUserPrivateAsync(uploadedFile.UploadedById, userRepo), this);
 
             var revisionsWithUsers = await Task.WhenAll(
@@ -67,7 +118,7 @@ public class ScriptContext
         }
 
         _isRunningGetAllFiles = false;
-        var values =_fileCache.Values.ToArray().ToScriptArray(_engine);
+        var values = _fileCache.Values.ToArray().ToScriptArray(_engine);
         return values;
     }
 

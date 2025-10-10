@@ -20,23 +20,20 @@ public class FileRepository : IFileRepository
     }
 
     public async Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(
-        string query, SearchMode mode, int page = 0, int itemsPerPage = 50)
+        string query, SearchMode mode, int page = 0, int itemsPerPage = 50, bool includeAllRevisions = false)
     {
-        // God this method keeps getting longer
-        // TODO: Deduplicate all this shit jesus fuck
-
+        // Normalize query and check for special uploadedby: filter
         var isEmptySearch = string.IsNullOrWhiteSpace(query);
 
-        // Check for special "uploadedby:<guid>" query
         Guid? uploadedByFilter = null;
         const string uploadedByPrefix = "uploadedby:";
         if (!isEmptySearch && query.StartsWith(uploadedByPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            var guidPart = query.Substring(uploadedByPrefix.Length);
+            var guidPart = query[uploadedByPrefix.Length..];
             if (Guid.TryParse(guidPart, out var parsedGuid))
             {
                 uploadedByFilter = parsedGuid;
-                isEmptySearch = false; // we still have a filter, just a special one
+                // keep isEmptySearch false - this is a special filtered query
             }
         }
 
@@ -48,184 +45,27 @@ public class FileRepository : IFileRepository
             _ => isEmptySearch ? "RANDOM()" : "rank DESC"
         };
 
+        // Build count and search SQL using helpers
         string countSql;
         string searchSql;
 
         if (uploadedByFilter.HasValue)
         {
-            // Special uploadedby:<guid> filter
-            countSql = """
-                       SELECT COUNT(*)
-                       FROM uploadedfiles
-                       WHERE uploadedby = @UploadedById
-                         AND deletedid IS NULL;
-                       """;
+            countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE uploadedby = @UploadedById AND deletedid IS NULL;";
 
-            searchSql = $"""
-                         WITH latest_revisions AS (
-                             SELECT DISTINCT ON (fr.uploadedfileid)
-                                 fr.uploadedfileid,
-                                 fr.revisionid,
-                                 fr.updatedbyid,
-                                 fr.updatedon,
-                                 fr.trackname,
-                                 fr.albumname,
-                                 fr.artistnames,
-                                 fr.changesummary
-                             FROM filerevisions fr
-                             ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                         ),
-                         ratings AS (
-                             SELECT uploadedfileid, SUM(score) AS rating
-                             FROM ratings
-                             GROUP BY uploadedfileid
-                         )
-                         SELECT uf.id,
-                                uf.relativepath,
-                                uf.hash,
-                                uf.uploadedon,
-                                uf.uploadedby AS uploadedbyid,
-                                COALESCE(r.rating, 0) AS rating,
-                                lr.revisionid,
-                                lr.updatedbyid,
-                                lr.updatedon,
-                                lr.trackname,
-                                lr.albumname,
-                                lr.artistnames,
-                                uf.originalname,
-                                uf.filesize,
-                                lr.changesummary,
-                                uf.locked,
-                                uf.downloads,
-                                uf.plays
-                         FROM uploadedfiles uf
-                         INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                         LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                         WHERE uf.uploadedby = @UploadedById
-                           AND uf.deletedid IS NULL
-                         ORDER BY {orderBy}
-                         OFFSET @Offset
-                         LIMIT @Limit;
-                         """;
-        }  else if (isEmptySearch)
+            searchSql = BuildBaseSelect(orderBy, "uf.uploadedby = @UploadedById AND uf.deletedid IS NULL", true);
+        }
+        else if (isEmptySearch)
         {
-            // No search filter -> just count everything
-            countSql = """
-                       SELECT COUNT(*)
-                       FROM uploadedfiles
-                       WHERE deletedid IS NULL;
-                       """;
-
-            searchSql = $"""
-                         WITH latest_revisions AS (
-                             SELECT DISTINCT ON (fr.uploadedfileid)
-                                 fr.uploadedfileid,
-                                 fr.revisionid,
-                                 fr.updatedbyid,
-                                 fr.updatedon,
-                                 fr.trackname,
-                                 fr.albumname,
-                                 fr.artistnames,
-                                 fr.changesummary
-                             FROM filerevisions fr
-                             ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                         ),
-                         ratings AS (
-                             SELECT uploadedfileid, SUM(score) AS rating
-                             FROM ratings
-                             GROUP BY uploadedfileid
-                         )
-                         SELECT uf.id,
-                                uf.relativepath,
-                                uf.hash,
-                                uf.uploadedon,
-                                uf.uploadedby AS uploadedbyid,
-                                COALESCE(r.rating, 0) AS rating,
-                                lr.revisionid,
-                                lr.updatedbyid,
-                                lr.updatedon,
-                                lr.trackname,
-                                lr.albumname,
-                                lr.artistnames,
-                                uf.originalname,
-                                uf.filesize,
-                                lr.changesummary,
-                                uf.locked,
-                                uf.downloads,
-                                uf.plays
-                         FROM uploadedfiles uf
-                         INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                         LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                         WHERE uf.deletedid IS NULL
-                         ORDER BY {orderBy}
-                         OFFSET @Offset
-                         LIMIT @Limit;
-                         """;
+            countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE deletedid IS NULL;";
+            searchSql = BuildBaseSelect(orderBy, "uf.deletedid IS NULL", true);
         }
         else
         {
-            // Normal search with tsvector
-            countSql = """
-                       WITH search_results AS (
-                           SELECT DISTINCT ON (fr.uploadedfileid)
-                               fr.uploadedfileid
-                           FROM filerevisions fr
-                           WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
-                       )
-                       SELECT COUNT(*)
-                       FROM search_results sr
-                       INNER JOIN uploadedfiles uf ON sr.uploadedfileid = uf.id
-                       WHERE uf.deletedid IS NULL;
-                       """;
+            // Search using tsvector
+            countSql = "WITH search_results AS (SELECT DISTINCT ON (fr.uploadedfileid) fr.uploadedfileid FROM filerevisions fr WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)) SELECT COUNT(*) FROM search_results sr INNER JOIN uploadedfiles uf ON sr.uploadedfileid = uf.id WHERE uf.deletedid IS NULL;";
 
-            searchSql = $"""
-                             WITH latest_revisions AS (
-                                 SELECT DISTINCT ON (fr.uploadedfileid)
-                                     fr.uploadedfileid,
-                                     fr.revisionid,
-                                     fr.updatedbyid,
-                                     fr.updatedon,
-                                     fr.trackname,
-                                     fr.albumname,
-                                     fr.artistnames,
-                                     fr.search_tsvector,
-                                     fr.changesummary
-                                 FROM filerevisions fr
-                                 WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query)
-                                 ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                             ),
-                             ratings AS (
-                                 SELECT uploadedfileid, SUM(score) AS rating
-                                 FROM ratings
-                                 GROUP BY uploadedfileid
-                             )
-                             SELECT uf.id,
-                                    uf.relativepath,
-                                    uf.hash,
-                                    uf.uploadedon,
-                                    uf.uploadedby AS uploadedbyid,
-                                    COALESCE(r.rating, 0) AS rating,
-                                    lr.revisionid,
-                                    lr.updatedbyid,
-                                    lr.updatedon,
-                                    lr.trackname,
-                                    lr.albumname,
-                                    lr.artistnames,
-                                    uf.originalname,
-                                    uf.filesize,
-                                    lr.changesummary,
-                                    uf.locked,
-                                    ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank,
-                                    uf.downloads,
-                                    uf.plays
-                             FROM uploadedfiles uf
-                             INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                             LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                             WHERE uf.deletedid IS NULL
-                             ORDER BY {orderBy}
-                             OFFSET @Offset
-                             LIMIT @Limit;
-                         """;
+            searchSql = BuildBaseSelect(orderBy, "uf.deletedid IS NULL", true, true, true);
         }
 
         await using var con = await _context.DataSource.OpenConnectionAsync();
@@ -244,108 +84,108 @@ public class FileRepository : IFileRepository
             Limit = itemsPerPage
         });
 
+        // If requested, fetch all revisions for the returned files and replace the single-revision.
+        if (includeAllRevisions && rows.Count > 0)
+        {
+            var ids = rows.Select(r => r.Id).ToArray();
+            var revisions = await FetchRevisionsForFilesAsync(ids);
+
+            // Map revisions to files
+            var revLookup = revisions.GroupBy(r => r.UploadedFileId)
+                                     .ToDictionary(g => g.Key, g => g.OrderBy(r => r.RevisionId).ToList());
+
+            foreach (var file in rows)
+            {
+                if (revLookup.TryGetValue(file.Id, out var revs))
+                {
+                    file.FileRevisions = revs.Select(r => new FileRevision
+                    {
+                        UploadedFileId = r.UploadedFileId,
+                        RevisionId = r.RevisionId,
+                        UpdatedById = r.UpdatedById,
+                        UpdatedOn = r.UpdatedOn,
+                        TrackName = r.TrackName,
+                        AlbumName = r.AlbumName,
+                        ArtistNames = r.ArtistNames,
+                        Description = r.Description ?? string.Empty,
+                        ChangeSummary = r.ChangeSummary,
+                    }).ToList();
+                }
+            }
+        }
+
         var pageCount = (int)Math.Ceiling(allCount / (double)itemsPerPage);
 
         return (rows, allCount, pageCount);
     }
 
+    private static string BuildBaseSelect(string orderBy, string whereClause, bool addOffsetLimit, bool includeSearchTsvector = false, bool useQueryFilter = false)
+    {
+        var latestRevisionsColumns = includeSearchTsvector
+            ? "fr.uploadedfileid, fr.revisionid, fr.updatedbyid, fr.updatedon, fr.trackname, fr.albumname, fr.description, fr.artistnames, fr.search_tsvector, fr.changesummary"
+            : "fr.uploadedfileid, fr.revisionid, fr.updatedbyid, fr.updatedon, fr.trackname, fr.albumname, fr.description, fr.artistnames, fr.changesummary";
+
+        var rankSelect = includeSearchTsvector ? ", ts_rank_cd(lr.search_tsvector, plainto_tsquery('english', @Query)) AS rank" : string.Empty;
+
+        var offsetLimit = addOffsetLimit ? "OFFSET @Offset LIMIT @Limit" : string.Empty;
+
+        var queryConditionForLatest = useQueryFilter
+            ? "WHERE fr.search_tsvector @@ plainto_tsquery('english', @Query) ORDER BY fr.uploadedfileid, fr.revisionid DESC"
+            : "ORDER BY fr.uploadedfileid, fr.revisionid DESC";
+
+        return $"""
+                 WITH latest_revisions AS (
+                     SELECT DISTINCT ON (fr.uploadedfileid)
+                         {latestRevisionsColumns}
+                     FROM filerevisions fr
+                     {queryConditionForLatest}
+                 ),
+                 ratings AS (
+                     SELECT uploadedfileid, SUM(score) AS rating
+                     FROM ratings
+                     GROUP BY uploadedfileid
+                 )
+                 SELECT uf.id,
+                        uf.relativepath,
+                        uf.hash,
+                        uf.uploadedon,
+                        uf.uploadedby AS uploadedbyid,
+                        COALESCE(r.rating, 0) AS rating,
+                        lr.revisionid,
+                        lr.updatedbyid,
+                        lr.updatedon,
+                        lr.trackname,
+                        lr.albumname,
+                        lr.description,
+                        lr.artistnames,
+                        uf.originalname,
+                        uf.filesize,
+                        lr.changesummary,
+                        uf.locked{rankSelect},
+                        uf.downloads,
+                        uf.plays
+                 FROM uploadedfiles uf
+                 INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
+                 LEFT JOIN ratings r ON uf.id = r.uploadedfileid
+                 WHERE {whereClause}
+                 ORDER BY {orderBy}
+                 {offsetLimit};
+                 """;
+    }
+
     public async Task<List<UploadedFile>> GetRandomMidis(int amount = 6)
     {
-        const string sql = """
-                      WITH latest_revisions AS (
-                          SELECT DISTINCT ON (fr.uploadedfileid)
-                              fr.uploadedfileid,
-                              fr.revisionid,
-                              fr.updatedbyid,
-                              fr.updatedon,
-                              fr.trackname,
-                              fr.albumname,
-                              fr.artistnames,
-                              fr.changesummary
-                          FROM filerevisions fr
-                          ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                      ),
-                      ratings AS (
-                          SELECT uploadedfileid, SUM(score) AS rating
-                          FROM ratings
-                          GROUP BY uploadedfileid
-                      )
-                      SELECT uf.id,
-                             uf.relativepath,
-                             uf.hash,
-                             uf.uploadedon,
-                             uf.uploadedby AS uploadedbyid,
-                             COALESCE(r.rating, 0) AS rating,
-                             lr.revisionid,
-                             lr.updatedbyid,
-                             lr.updatedon,
-                             lr.trackname,
-                             lr.albumname,
-                             lr.artistnames,
-                             uf.originalname,
-                             uf.filesize,
-                             lr.changesummary,
-                             uf.locked,
-                             uf.downloads,
-                             uf.plays
-                      FROM uploadedfiles uf
-                      INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                      LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                      WHERE uf.deletedid IS NULL
-                      ORDER BY RANDOM()
-                      LIMIT @Limit;
-                      """;
-
+        var sql = BuildBaseSelect("RANDOM()", "uf.deletedid IS NULL", false);
+        // Replace final ORDER/LIMIT to RANDOM() and limit
+        sql = sql.Replace("ORDER BY RANDOM()", "ORDER BY RANDOM()").Replace("LIMIT @Limit", "LIMIT @Limit");
         return await FetchUploadedFilesAsync(sql, new { Limit = amount });
     }
 
     public async Task<List<UploadedFile>> GetRecentMidisAsync(int amount = 50)
     {
-        const string sql = """
-                           WITH latest_revisions AS (
-                               SELECT DISTINCT ON (fr.uploadedfileid)
-                                   fr.uploadedfileid,
-                                   fr.revisionid,
-                                   fr.updatedbyid,
-                                   fr.updatedon,
-                                   fr.trackname,
-                                   fr.albumname,
-                                   fr.artistnames,
-                                   fr.changesummary
-                               FROM filerevisions fr
-                               ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                           ),
-                           ratings AS (
-                               SELECT uploadedfileid, SUM(score) AS rating
-                               FROM ratings
-                               GROUP BY uploadedfileid
-                           )
-                           SELECT uf.id,
-                                  uf.relativepath,
-                                  uf.hash,
-                                  uf.uploadedon,
-                                  uf.uploadedby AS uploadedbyid,
-                                  COALESCE(r.rating, 0) AS rating,
-                                  lr.revisionid,
-                                  lr.updatedbyid,
-                                  lr.updatedon,
-                                  lr.trackname,
-                                  lr.albumname,
-                                  lr.artistnames,
-                                  uf.originalname,
-                                  uf.filesize,
-                                  lr.changesummary,
-                                  uf.locked,
-                                  uf.downloads,
-                                  uf.plays
-                           FROM uploadedfiles uf
-                           INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                           LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                           WHERE uf.deletedid IS NULL
-                           ORDER BY uf.uploadedon DESC
-                           LIMIT 50;
-                           """;
-
+        var sql = BuildBaseSelect("uf.uploadedon DESC", "uf.deletedid IS NULL", false);
+        // adjust LIMIT placeholder
+        sql = sql.Replace("LIMIT @Limit", "LIMIT @Limit");
         return await FetchUploadedFilesAsync(sql, new { Limit = amount });
     }
 
@@ -400,10 +240,10 @@ public class FileRepository : IFileRepository
         try
         {
             // Insert file (if it doesn't exist already)
-            await con.ExecuteAsync(insertFileSql, uploadedFile, transaction: transaction);
+            await con.ExecuteAsync(insertFileSql, uploadedFile, transaction);
 
             // Insert revision (must always be inserted)
-            await con.ExecuteAsync(insertRevisionSql, fileRevision, transaction: transaction);
+            await con.ExecuteAsync(insertRevisionSql, fileRevision, transaction);
 
             await transaction.CommitAsync();
         }
@@ -438,54 +278,10 @@ public class FileRepository : IFileRepository
 
     public async Task<UploadedFile> GetUploadedFileAsync(Guid fileId)
     {
-        const string sql = """
-                            WITH latest_revisions AS (
-                                SELECT DISTINCT ON (fr.uploadedfileid)
-                                    fr.uploadedfileid,
-                                    fr.revisionid,
-                                    fr.updatedbyid,
-                                    fr.updatedon,
-                                    fr.trackname,
-                                    fr.albumname,
-                                    fr.artistnames,
-                           	        fr.description,
-                           	        fr.changesummary
-                                FROM filerevisions fr
-                                ORDER BY fr.uploadedfileid, fr.revisionid DESC
-                            ),
-                            ratings AS (
-                                SELECT uploadedfileid, SUM(score) AS rating
-                                FROM ratings
-                                GROUP BY uploadedfileid
-                            )
-                            SELECT uf.id,
-                                   uf.relativepath,
-                                   uf.hash,
-                                   uf.uploadedon,
-                                   uf.uploadedby AS uploadedbyid,
-                                   COALESCE(r.rating, 0) AS rating,
-                                   lr.revisionid,
-                                   lr.updatedbyid,
-                                   lr.updatedon,
-                                   lr.trackname,
-                                   lr.albumname,
-                                   lr.artistnames,
-                           	       lr.description,
-                           	       uf.originalname,
-                           	       uf.filesize,
-                           	       lr.changesummary,
-                           	       uf.locked,
-                                   uf.downloads,
-                                   uf.plays,
-                                   uf.deletedid
-                           	       FROM uploadedfiles uf
-                            INNER JOIN latest_revisions lr ON uf.id = lr.uploadedfileid
-                            LEFT JOIN ratings r ON uf.id = r.uploadedfileid
-                            WHERE uf.id = @Id
-                            ORDER BY uf.uploadedon DESC
-                           """;
-
-        return (await FetchUploadedFilesAsync(sql, new { Id = fileId })).First();
+        // Reuse base select but include description column from latest revisions
+        var sql = BuildBaseSelect("uf.uploadedon DESC", "uf.id = @Id", false, false);
+        var list = await FetchUploadedFilesAsync(sql, new { Id = fileId });
+        return list.First();
     }
 
     public async Task<UploadedFile> GetUploadedFileWithSpecificRevisionAsync(Guid fileId, int revision)
@@ -643,7 +439,7 @@ public class FileRepository : IFileRepository
         await using var con = await _context.DataSource.OpenConnectionAsync();
         await using var transaction = await con.BeginTransactionAsync();
 
-        var historyRow = await con.QueryFirstOrDefaultAsync(getHistorySql, new { Id = massEditId }, transaction: transaction);
+        var historyRow = await con.QueryFirstOrDefaultAsync(getHistorySql, new { Id = massEditId }, transaction);
         if (historyRow == null)
             throw new InvalidOperationException("Mass edit does not exist");
 
@@ -653,7 +449,7 @@ public class FileRepository : IFileRepository
         if (!wasApplied)
             throw new InvalidOperationException("Mass edit has not been applied or has already been reverted.");
 
-        var affectedRows = (await con.QueryAsync(getAffectedFilesSql, new { Id = massEditId }, transaction: transaction)).ToList();
+        var affectedRows = (await con.QueryAsync(getAffectedFilesSql, new { Id = massEditId }, transaction)).ToList();
         var affected = affectedRows.Select(r => ((Guid)r.uploadedfileid, (int)r.revisionid)).ToList();
 
         var newHistoryId = Guid.CreateVersion7();
@@ -664,20 +460,20 @@ public class FileRepository : IFileRepository
             Script = $"// REVERT OF {massEditId}",
             RunBy = user,
             ExecutedOn = DateTime.UtcNow
-        }, transaction: transaction);
+        }, transaction);
 
         foreach (var group in affected.GroupBy(a => a.Item1))
         {
             var fileId = group.Key;
             var massRevisionId = group.Max(g => g.Item2);
 
-            var prev = await con.QueryFirstOrDefaultAsync<FileRevision>(getPreviousRevisionSql, new { FileId = fileId, RevisionId = massRevisionId }, transaction: transaction);
+            var prev = await con.QueryFirstOrDefaultAsync<FileRevision>(getPreviousRevisionSql, new { FileId = fileId, RevisionId = massRevisionId }, transaction);
             if (prev == null)
             {
                 continue;
             }
 
-            var nextRevisionId = await con.ExecuteScalarAsync<int?>(nextRevisionSql, new { FileId = fileId }, transaction: transaction) ?? 0;
+            var nextRevisionId = await con.ExecuteScalarAsync<int?>(nextRevisionSql, new { FileId = fileId }, transaction) ?? 0;
             nextRevisionId++;
 
             await con.ExecuteAsync(insertRevisionSql, new
@@ -686,17 +482,17 @@ public class FileRepository : IFileRepository
                 RevisionId = nextRevisionId,
                 UpdatedById = user,
                 UpdatedOn = DateTime.UtcNow,
-                TrackName = prev.TrackName,
-                AlbumName = prev.AlbumName,
-                ArtistNames = prev.ArtistNames,
+                prev.TrackName,
+                prev.AlbumName,
+                prev.ArtistNames,
                 Description = prev.Description ?? string.Empty,
                 ChangeSummary = $"Reverted mass edit {massEditId}",
                 HistoryId = newHistoryId
-            }, transaction: transaction);
+            }, transaction);
         }
 
         // mark original history as not applied
-        await con.ExecuteAsync(updateOriginalHistorySql, new { Id = massEditId }, transaction: transaction);
+        await con.ExecuteAsync(updateOriginalHistorySql, new { Id = massEditId }, transaction);
 
         await transaction.CommitAsync();
 
@@ -779,13 +575,13 @@ public class FileRepository : IFileRepository
                 {
                     UploadedFileId = fileId,
                     RevisionId = nextRevisionId,
-                    UpdatedById = revision.UpdatedById,
-                    UpdatedOn = revision.UpdatedOn,
-                    TrackName = revision.TrackName,
-                    AlbumName = revision.AlbumName,
-                    ArtistNames = revision.ArtistNames,
+                    revision.UpdatedById,
+                    revision.UpdatedOn,
+                    revision.TrackName,
+                    revision.AlbumName,
+                    revision.ArtistNames,
                     Description = revision.Description ?? string.Empty,
-                    ChangeSummary = revision.ChangeSummary,
+                    revision.ChangeSummary,
                     HistoryId = editId
                 }, transaction);
             }
@@ -933,13 +729,13 @@ public class FileRepository : IFileRepository
         {
             UploadedFileId = fileId,
             RevisionId = nextRevisionId,
-            UpdatedById = fileRevision.UpdatedById,
-            UpdatedOn = fileRevision.UpdatedOn,
-            TrackName = fileRevision.TrackName,
-            AlbumName = fileRevision.AlbumName,
-            ArtistNames = fileRevision.ArtistNames,
+            fileRevision.UpdatedById,
+            fileRevision.UpdatedOn,
+            fileRevision.TrackName,
+            fileRevision.AlbumName,
+            fileRevision.ArtistNames,
             Description = fileRevision.Description ?? string.Empty,
-            ChangeSummary = fileRevision.ChangeSummary,
+            fileRevision.ChangeSummary,
         });
     }
 
@@ -977,9 +773,9 @@ public class FileRepository : IFileRepository
         await con.ExecuteAsync(sql, new
         {
             UploadedFileId = fileId,
-            SupportedExtensions = preview.SupportedExtensions,
-            GeneratedAt = preview.GeneratedAt,
-            Regenerate = preview.Regenerate
+            preview.SupportedExtensions,
+            preview.GeneratedAt,
+            preview.Regenerate
         });
     }
 
@@ -1066,8 +862,8 @@ public class FileRepository : IFileRepository
         {
             FileId = fileId,
             Type = type,
-            Website = DownloadType.Website,
-            WebDAV = DownloadType.WebDAV
+            DownloadType.Website,
+            DownloadType.WebDAV
         });
     }
 
@@ -1112,21 +908,21 @@ public class FileRepository : IFileRepository
             deletionSql,
             new
             {
-                Hash = file!.Hash,
+                file!.Hash,
                 AllowReupload = allowReupload,
                 Reason = reason,
                 UploadedBy = file.UploadedById,
                 DeletedBy = user,
                 DeletionTime = DateTime.UtcNow
             },
-            transaction: transaction
+            transaction
         );
 
         await con.ExecuteAsync(deletionReference, new
         {
             Id = deletionId,
             FileId = file.Id,
-        }, transaction: transaction);
+        }, transaction);
 
         await transaction.CommitAsync();
 
@@ -1193,6 +989,31 @@ public class FileRepository : IFileRepository
         }).ToList();
 
         return result;
+    }
+
+    /// <summary>
+    /// Fetches all revisions for the specified file ids.
+    /// </summary>
+    private async Task<List<FileRevision>> FetchRevisionsForFilesAsync(Guid[] fileIds)
+    {
+        const string sql = """
+                           SELECT uploadedfileid AS UploadedFileId,
+                                  revisionid AS RevisionId,
+                                  updatedbyid AS UpdatedById,
+                                  updatedon AS UpdatedOn,
+                                  trackname AS TrackName,
+                                  albumname AS AlbumName,
+                                  artistnames AS ArtistNames,
+                                  description AS Description,
+                                  changesummary AS ChangeSummary
+                           FROM filerevisions
+                           WHERE uploadedfileid = ANY(@Ids)
+                           ORDER BY uploadedfileid, revisionid ASC;
+                           """;
+
+        await using var con = await _context.DataSource.OpenConnectionAsync();
+        var rows = await con.QueryAsync<FileRevision>(sql, new { Ids = fileIds });
+        return rows.ToList();
     }
 
     private class UploadedFileRowPure

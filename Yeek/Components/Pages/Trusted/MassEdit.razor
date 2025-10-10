@@ -48,6 +48,12 @@ const files = await context.GetAllFiles();
  * Returns a specific user by ID as a JsUser object.
  */
 const user = await context.GetUser(userId);
+
+/**
+ * Returns an array of all uploaded files (including all revisions). Filtered via the same method the main search uses. This is more efficient and reliable then GetAllFiles
+ * Each item is a JsFile instance.
+ */
+const filteredFiles = await context.QueryForFiles("query");
   </code></pre>
 
   <h4>JsFile</h4>
@@ -110,7 +116,7 @@ file.SetInfo(
   <pre><code>
 // This function is called automatically.
 async function run() {
-  let allFiles = await context.GetAllFiles();
+  let allFiles = await context.QueryForFiles("Outer Wilds");
   await log.info(`All files count: ${allFiles.length}`)
   for (let i = 0; i &lt; allFiles.length; i++) {
     const file = allFiles[i];
