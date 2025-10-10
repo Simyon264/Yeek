@@ -177,26 +177,8 @@ public class FileRepository : IFileRepository
     {
         var sql = BuildBaseSelect("RANDOM()", "uf.deletedid IS NULL", false);
         // Replace final ORDER/LIMIT to RANDOM() and limit
-        sql = sql.Replace("ORDER BY RANDOM()", "ORDER BY RANDOM()").Replace("LIMIT @Limit", "LIMIT @Limit");
+        sql = sql.Replace("ORDER BY RANDOM()", "ORDER BY RANDOM() LIMIT @Limit");
         return await FetchUploadedFilesAsync(sql, new { Limit = amount });
-    }
-
-    public async Task<List<UploadedFile>> GetRecentMidisAsync(int amount = 50)
-    {
-        var sql = BuildBaseSelect("uf.uploadedon DESC", "uf.deletedid IS NULL", false);
-        // adjust LIMIT placeholder
-        sql = sql.Replace("LIMIT @Limit", "LIMIT @Limit");
-        return await FetchUploadedFilesAsync(sql, new { Limit = amount });
-    }
-
-    public async Task<int> GetAllCountAsync()
-    {
-        const string command = """
-                               SELECT count(*) FROM public.uploadedfiles
-                               """;
-
-        await using var con = await _context.DataSource.OpenConnectionAsync();
-        return await con.QueryFirstAsync<int>(command);
     }
 
     public async Task<(bool foundMatch, Guid? fileId)> FindFileByShaAsync(string sha)

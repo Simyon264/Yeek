@@ -7,10 +7,6 @@ public interface IFileRepository
 {
     public Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(string query, SearchMode mode, int page = 0, int itemsPerPage = 50, bool includeAllRevisions = false);
     public Task<List<UploadedFile>> GetRandomMidis(int amount = 6);
-    public Task<List<UploadedFile>> GetRecentMidisAsync(int amount = 50);
-
-    public Task<int> GetAllCountAsync();
-
     public Task<(bool foundMatch, Guid? fileId)> FindFileByShaAsync(string sha);
     public Task UploadFileAsync(UploadedFile uploadedFile, FileRevision fileRevision);
     public Task<List<ScriptHistory>> GetExecutedScriptsAsync();
