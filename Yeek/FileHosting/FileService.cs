@@ -196,7 +196,7 @@ public class FileService
         var canUpload = await _fileRepository.GetReuploadStatusForHash(sha);
         if (!canUpload)
         {
-            return Results.BadRequest("File is blocked for uploading. This is probably because of legal reasons. Create a ticket to resolve this if you belive this may be an error.");
+            return Results.BadRequest("File is blocked for uploading. This is probably because of legal reasons. Create a ticket to resolve this if you believe this may be an error.");
         }
 
         var existingFile = await _fileRepository.FindFileByShaAsync(sha);
