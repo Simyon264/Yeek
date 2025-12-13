@@ -78,11 +78,6 @@
     protected override async Task OnParametersSetAsync()
     {
         _canManage = await PlaylistRepository.CanManagePlaylist(Guid, User?.Id ?? Guid.Empty);
-        if (!_canManage)
-        {
-            HttpContext.HttpContext!.Response.StatusCode = 404;
-            return;
-        }
 
         _playlist = await PlaylistRepository.GetPlaylistOrNull(Guid);
         if (_playlist == null)
