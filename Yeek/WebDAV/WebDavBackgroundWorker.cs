@@ -196,6 +196,7 @@ public class WebDavBackgroundWorker : BackgroundService
 
             var playlistDir = GetOrCreateDirectory(playlistsDir, playlist.Name);
             playlistDir.XmlCacheByDepth.Clear();
+            playlistDir.Files.Clear();
 
             await foreach (var file in playlistRepository.EnumeratePlaylistEntriesAsync(playlist, stoppingToken))
             {
