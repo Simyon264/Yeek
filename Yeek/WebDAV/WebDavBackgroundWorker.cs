@@ -27,7 +27,7 @@ public class WebDavBackgroundWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (_webDavManager.Updates.Count > 0 || !_webDavManager.Ready || _webDavManager.Deletes.Count > 0)
+            if (_webDavManager.AnyUpdates || !_webDavManager.Ready)
             {
                 await Update(stoppingToken);
             }
@@ -40,6 +40,7 @@ public class WebDavBackgroundWorker : BackgroundService
     {
         using var scope = _serviceScopeFactory.CreateScope();
         var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+        var playlistRepository = scope.ServiceProvider.GetRequiredService<IPlaylistRepository>();
 
         _logger.LogInformation("Updating VFS...");
 
@@ -47,6 +48,7 @@ public class WebDavBackgroundWorker : BackgroundService
         {
             _logger.LogInformation("Performing first time setup... This may take a while.");
             _webDavManager.Updates.AddRange(await fileRepository.GetAllIdsAsync());
+            _webDavManager.PlaylistUpdates.AddRange(await playlistRepository.GetAllPlaylists());
         }
 
         var pendingUpdates = new Queue<Guid>(_webDavManager.Updates);
@@ -162,6 +164,73 @@ public class WebDavBackgroundWorker : BackgroundService
                 letterDir.XmlCacheByDepth.Clear();
                 AddFileToDirectory(letterDir, file);
             }
+        }
+
+        pendingUpdates = new Queue<Guid>(_webDavManager.PlaylistUpdates);
+        _webDavManager.Updates.Clear();
+
+        pendingDeletes = new Queue<Guid>(_webDavManager.PlaylistDeletes);
+        _webDavManager.Deletes.Clear();
+
+        while (pendingUpdates.Count > 0 && !stoppingToken.IsCancellationRequested)
+        {
+            var playlistId = pendingUpdates.Dequeue();
+            Playlist playlist;
+
+            try
+            {
+                var tempPlaylist = await playlistRepository.GetPlaylistOrNull(playlistId);
+                playlist = tempPlaylist ?? throw new InvalidOperationException("Playlist not found.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch playlist {FileId}, skipping.", playlistId);
+                continue;
+            }
+
+            var any = false;
+
+            var root = _webDavManager.RootDirectory;
+            var playlistsDir = GetOrCreateDirectory(root, "Playlists");
+            playlistsDir.XmlCacheByDepth.Clear();
+
+            var playlistDir = GetOrCreateDirectory(playlistsDir, playlist.Name);
+            playlistDir.XmlCacheByDepth.Clear();
+
+            await foreach (var file in playlistRepository.EnumeratePlaylistEntriesAsync(playlist, stoppingToken))
+            {
+                any = true;
+                AddFileToDirectory(playlistDir, file);
+            }
+
+            if (!any)
+            {
+                // Empty playlist can just be left out.
+                playlistsDir.Children.RemoveAll(x => x.Name == playlist.Name);
+                playlistsDir.XmlCacheByDepth.Clear();
+            }
+        }
+
+        while (pendingDeletes.Count > 0 && !stoppingToken.IsCancellationRequested)
+        {
+            var playlistId = pendingUpdates.Dequeue();
+            Playlist playlist;
+
+            try
+            {
+                var tempPlaylist = await playlistRepository.GetPlaylistOrNull(playlistId);
+                playlist = tempPlaylist ?? throw new InvalidOperationException("Playlist not found.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch playlist {FileId}, skipping.", playlistId);
+                continue;
+            }
+
+            var root = _webDavManager.RootDirectory;
+            var playlistsDir = GetOrCreateDirectory(root, "Playlists");
+            playlistsDir.Children.RemoveAll(x => x.Name == playlist.Name);
+            playlistsDir.XmlCacheByDepth.Clear();
         }
 
         _webDavManager.Ready = true;

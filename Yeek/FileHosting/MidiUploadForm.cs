@@ -84,5 +84,5 @@ public partial class MidiUploadForm : IValidatableObject
     }
 
     [GeneratedRegex(@"[\\/:*?""<>|]")]
-    private static partial Regex InvalidCharactersRegex();
+    public static partial Regex InvalidCharactersRegex();
 }

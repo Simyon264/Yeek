@@ -69,6 +69,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IFileRepository, FileRepository>();
 builder.Services.AddScoped<IModerationRepository, ModerationRepository>();
 builder.Services.AddScoped<IAdminRepository, AdminRepository>();
+builder.Services.AddScoped<IPlaylistRepository, PlaylistRepository>();
 
 #endregion
 

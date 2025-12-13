@@ -23,14 +23,16 @@ public class FileService
     private readonly ILogger<FileService> _logger;
     private readonly WebDavManager _webDavManager;
     private readonly ScriptService _scriptService;
+    private readonly IPlaylistRepository _playlistRepository;
 
-    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository, ScriptService scriptService)
+    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository, ScriptService scriptService, IPlaylistRepository playlistRepository)
     {
         _logger = logger;
         _fileRepository = context;
         _webDavManager = webDavManager;
         _userRepository = userRepository;
         _scriptService = scriptService;
+        _playlistRepository = playlistRepository;
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
         configuration.Bind(JavaScriptConfiguration.Name, _javaScriptConfiguration);
     }
@@ -362,6 +364,95 @@ public class FileService
         var jobId = _scriptService.StartJob(body, userId.Value, apply);
 
         return Results.Text(jobId.ToString(), statusCode: 202);
+    }
+
+    public async Task<IResult> GetPlaylistsForFile(Guid fileId, ClaimsPrincipal user)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+
+        var playlists = await _playlistRepository.GetPlaylistsForUser(userId.Value);
+        var playlistWhereFileRealWawaSlugcat =
+            await _playlistRepository.GetPlaylistIdsForFileForUser(fileId, userId.Value);
+
+        var resp = new List<object>();
+        foreach (var playlist in playlists)
+        {
+            var added = playlistWhereFileRealWawaSlugcat.Contains(playlist.Id);
+            resp.Add(new
+            {
+                name = playlist.Name,
+                id = playlist.Id,
+                added = added,
+            });
+        }
+
+        return Results.Ok(resp);
+    }
+
+    public async Task<IResult> CreatePlaylist(string name, ClaimsPrincipal user)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
+
+        if (string.IsNullOrWhiteSpace(name))
+            return Results.BadRequest("Name is required.");
+
+        if (MidiUploadForm.InvalidCharactersRegex().IsMatch(name))
+            return Results.BadRequest("Name contains invalid characters (\\ / : * ? \" < > |).");
+
+        var playlists = await _playlistRepository.GetPlaylistsForUser(userId.Value);
+        if (playlists.Any(x => x.Name == name))
+            return Results.BadRequest("Playlist with the same name already exists.");
+
+        await _playlistRepository.CreatePlaylist(userId.Value, name);
+        return Results.Ok();
+    }
+
+    public async Task<IResult> AddOrRemoveToPlaylist(Guid playlistId, Guid fileId, ClaimsPrincipal user)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
+
+        var canManage = await _playlistRepository.CanManagePlaylist(playlistId, userId.Value);
+        if (!canManage)
+            return Results.StatusCode(403);
+
+        // Check to see if the song is even real.
+        var isReal = await _fileRepository.FileExistsAsync(fileId);
+        if (!isReal)
+            return Results.BadRequest("File does not exist.");
+
+        var status = await _playlistRepository.RemoveOrAddSongToPlaylist(playlistId, fileId);
+        _webDavManager.PlaylistUpdates.Add(playlistId);
+        return Results.Ok(status);
+    }
+
+    public async Task<IResult> DeletePlaylist(Guid playlistId, ClaimsPrincipal user)
+    {
+        var userId = user.Claims.GetUserId();
+        if (userId == null)
+            return Results.Unauthorized();
+        var banStatus = await GetBanStatusResult(userId.Value);
+        if (banStatus != null)
+            return banStatus;
+
+        var canManage = await _playlistRepository.CanManagePlaylist(playlistId, userId.Value);
+        if (!canManage)
+            return Results.StatusCode(403);
+
+        await _playlistRepository.DeletePlaylist(playlistId);
+        _webDavManager.PlaylistDeletes.Add(playlistId);
+        return Results.Ok();
     }
 
     private static string CalculateHash(MemoryStream stream)

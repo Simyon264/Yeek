@@ -58,7 +58,7 @@
         }
 
         var desc = !_hasDescription
-            ? "Hosting your MIDI files for all your Space Station needs."
+            ? ""
             : _file.MostRecentRevision.Description!;
 
         // Add a blank line between album/artist and the description
@@ -148,19 +148,47 @@
     }
 </div>
 
-<a class="midi-page-download" href="/download/@_file.Id" target="_blank">Download</a>
-<a href="/@_file.Id/edit">Edit</a>
-<a href="/@_file.Id/history">History</a>
-<a class="report-button" href="/moderation/report/new?topic=midi-@HtmlEncoder.Default.Encode($"{_file.Id}-rev-{_file.MostRecentRevision.RevisionId}")" target="_blank">Report content</a>
-@if (User is { TrustLevel: >= TrustLevel.Moderator })
-{
-    <a href="/moderation/takedown/new?item=@_file.Id">MOD: Delete Content</a>
-}
+<div class="quick-links">
+    <a class="midi-page-download" href="/download/@_file.Id" target="_blank">Download</a>
+    <a href="/@_file.Id/edit">Edit</a>
+    <a href="/@_file.Id/history">History</a>
+    @if (User != null)
+    {
+        <a onclick="addPlaylist()">Add to playlist</a>
+    }
+    <a class="report-button" href="/moderation/report/new?topic=midi-@HtmlEncoder.Default.Encode($"{_file.Id}-rev-{_file.MostRecentRevision.RevisionId}")" target="_blank">Report content</a>
+    @if (User is { TrustLevel: >= TrustLevel.Moderator })
+    {
+        <a href="/moderation/takedown/new?item=@_file.Id">MOD: Delete Content</a>
+    }
+</div>
+
+<div class="shitty-modal" id="modal">
+    <p>Playlists are a way to group MIDIs together for mass-downloading or playback via WebDAV.</p>
+    <div class="playlist-array" id="playlist-array">
+        <p class="pwease-wait">Please wait...</p>
+    </div>
+    <hr/>
+    <div>
+        <span>Create playlist</span><br/>
+        <input type="text" id="new-playlist-name" placeholder="Playlist name"/>
+        <button onclick="createPlaylist()" id="create-button" disabled>Create</button>
+    </div>
+    <hr/>
+
+    <small>Checking and unchecking automatically saves.</small>
+    <br/>
+    <button onclick="exitModal()">Exit</button>
+</div>
 
 <script defer>
     const fileId = "@_file.Id";
     let currentVote = @_userScore;
     let currentScore = parseInt(document.getElementById("rating").innerText); // initial score
+    const modal = document.getElementById("modal");
+    const playlistArray = document.getElementById("playlist-array");
+    const modalCreateButton = document.getElementById("create-button");
+    const newPlaylist = document.getElementById("new-playlist-name");
 
     async function rate(score) {
         const up = document.getElementById("rateup");
@@ -239,6 +267,82 @@
             ratingEl.classList.add("bad");
         } else {
             ratingEl.classList.add("neutral");
+        }
+    }
+
+    function exitModal() {
+        modal.removeAttribute("show")
+    }
+
+    async function createPlaylist() {
+        if (newPlaylist.value === "") {
+            alert("Name must have value.")
+            return;
+        }
+
+        const response = await fetch(`/playlists?name=${newPlaylist.value}`, {
+            method: "POST",
+            headers: { "Accept": "application/json" }
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            alert(`Error creating playlist: ${text}`);
+            console.error(response);
+            return;
+        }
+
+        // preem, refresh modal
+        newPlaylist.value = "";
+        await addPlaylist();
+    }
+
+    async function addPlaylist() {
+        modal.setAttribute("show", "");
+        modalCreateButton.setAttribute("disabled", "");
+        // We show the modal if we haven't already
+
+        // go go gadget api call
+        const response = await fetch(`/playlists?file=${fileId}`, {
+            method: "GET",
+            headers: { "Accept": "application/json" }
+        });
+
+        playlistArray.innerHTML = "";
+        modalCreateButton.removeAttribute("disabled");
+        const json = await response.json(); // json deez nutz
+        if (json.length === 0) {
+            playlistArray.innerHTML = "<p>You have no playlists!</p>"
+            return;
+        }
+
+        let dollarStoreForLoop = 0;
+        json.forEach(playlist => {
+            let element = document.createElement("div");
+            let checkedString = "";
+            if (playlist.added)
+                checkedString = "checked";
+
+            element.innerHTML = `
+                <div class="playlist-item">
+                    <input onchange="addOrRemoveToPlaylist('${playlist.id}')" id="check-${dollarStoreForLoop}" type="checkbox" name="added" ${checkedString}/>
+                    <label for="check-${dollarStoreForLoop}">${playlist.name}</label>
+                </div>`
+
+            playlistArray.append(element);
+            dollarStoreForLoop++;
+        })
+    }
+
+    async function addOrRemoveToPlaylist(playlistId) {
+        const response = await fetch(`/playlists/entry?file=${fileId}&playlist=${playlistId}`, {
+            method: "PATCH",
+            headers: { "Accept": "application/json" }
+        });
+
+        // kinda fire and forget
+        if (!response.ok) {
+            alert("Failed adding or removing, please refresh and try again.")
         }
     }
 </script>

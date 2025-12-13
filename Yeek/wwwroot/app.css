@@ -1018,3 +1018,79 @@ pre {
     border-radius:6px;
     overflow:auto;
 }
+
+/* Modal Window */
+.shitty-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    background: var(--bg-secondary);
+    border: 1px solid var(--fg-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    opacity: 0;
+    transition:
+            opacity 0.25s ease,
+            transform 0.25s ease;
+    z-index: 1001;
+}
+
+
+.shitty-modal[show] {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.shitty-modal p {
+    margin-bottom: 1rem;
+    color: var(--fg-main);
+    line-height: 1.4;
+}
+
+.shitty-modal input[type="text"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--fg-border);
+    background: var(--bg-main);
+    color: var(--fg-main);
+    border-radius: 8px;
+}
+
+.shitty-modal button:hover {
+    background: var(--fg-link-hover);
+}
+
+/* Playlist list */
+.playlist-array {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    background: var(--bg-main);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--fg-border);
+    max-height: 450px;
+    overflow-y: scroll;
+}
+
+.playlist-item {
+    display: flex;
+}
+
+.playlist-item input {
+    margin-right: 0.5rem;
+}
+
+.playlist-array p {
+    margin: 0;
+}
+
+.pwease-wait {
+    text-align: center;
+    color: var(--fg-detail);
+}

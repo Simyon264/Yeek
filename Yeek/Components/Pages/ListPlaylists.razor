@@ -1,0 +1,36 @@
+﻿@page "/list-playlists"
+
+@using Microsoft.AspNetCore.Authorization
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+
+@attribute [Authorize]
+
+<h3>Playlists</h3>
+<p>Lists playlists you've made.</p>
+<small>This page is a WIP because I am bad at web design.</small>
+<br/>
+
+@foreach (var playlist in _playlists)
+{
+    <a href="/playlist/@playlist.Id">@playlist.Name</a>
+    <br/>
+}
+
+@code {
+    [Inject] private IPlaylistRepository PlaylistRepository { get; set; } = null!;
+
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    private List<Playlist> _playlists = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (User == null)
+            return;
+
+        _playlists = await PlaylistRepository.GetPlaylistsForUser(User.Id);
+    }
+}

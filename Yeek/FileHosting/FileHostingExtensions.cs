@@ -99,5 +99,21 @@ public static class FileHostingExtensions
         app.MapGet("/mass-edit/stream/{jobId:guid}", async (FileService fileService, HttpContext req, Guid jobId)
             => await fileService.GetMassJobStream(req, jobId))
             .RequireAuthorization();
+
+        app.MapGet("/playlists", async ([FromQuery] Guid file, FileService fileService, ClaimsPrincipal user)
+            => await fileService.GetPlaylistsForFile(file, user))
+            .RequireAuthorization();
+
+        app.MapPost("/playlists", async ([FromQuery] string name, FileService fileService, ClaimsPrincipal user)
+                => await fileService.CreatePlaylist(name, user))
+            .RequireAuthorization();
+
+        app.MapPatch("/playlists/entry", async ([FromQuery] Guid file, [FromQuery] Guid playlist, FileService fileService, ClaimsPrincipal user)
+                => await fileService.AddOrRemoveToPlaylist(playlist, file, user))
+            .RequireAuthorization();
+
+        app.MapDelete("/playlists", async ([FromQuery] Guid list, FileService fileService, ClaimsPrincipal user)
+                => await fileService.DeletePlaylist(list, user))
+            .RequireAuthorization();
     }
 }

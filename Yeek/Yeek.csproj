@@ -21,6 +21,7 @@
         <EmbeddedResource Include="Database\Migrations\Script0011_MultiAuthor.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0012_ContentRemoval.sql"/>
         <EmbeddedResource Include="Database\Migrations\Script0013_MassEdit.sql"/>
+        <EmbeddedResource Include="Database\Migrations\Script0014_Playlists.sql"/>
     </ItemGroup>
 
     <Target Name="NpmInstall" Inputs="JavaScript/package.json" Outputs="JavaScript/node_modules/.install-stamp">
@@ -51,6 +52,7 @@
       <PackageReference Include="Npgsql" Version="9.0.3" />
       <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
       <PackageReference Include="SpaceWizards.NFluidsynth" Version="0.2.2" />
+      <PackageReference Include="System.Linq.Async" Version="7.0.0" />
       <PackageReference Include="TickerQ" Version="2.5.3" />
     </ItemGroup>
 

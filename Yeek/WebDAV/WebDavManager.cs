@@ -6,6 +6,10 @@ public class WebDavManager
 {
     public List<Guid> Updates { get; set; } = new List<Guid>();
     public List<Guid> Deletes { get; set; } = new List<Guid>();
+    public List<Guid> PlaylistUpdates { get; set; } = [];
+    public List<Guid> PlaylistDeletes { get; set; } = [];
+
+    public bool AnyUpdates => Updates.Count > 0 || Deletes.Count > 0 || PlaylistUpdates.Count > 0 || PlaylistDeletes.Count > 0;
 
     public bool Ready { get; set; } = false;
 

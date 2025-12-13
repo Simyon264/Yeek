@@ -1,0 +1,96 @@
+﻿@page "/playlist/{Guid:guid}"
+
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+@using Yeek.Security.Model
+@using Yeek.Security.Repositories
+
+@inject IHttpContextAccessor HttpContext
+
+@if (_playlist == null)
+{
+    <p class="error-text">Playlist not found or you may be missing access.</p>
+    return;
+}
+
+<PageTitle>Yeek - Playlist</PageTitle>
+
+<OpenGraph>
+    <meta property="og:title" content="Yeek - Playlist: @_playlist.Name"/>
+    <meta property="og:type" content="website"/>
+</OpenGraph>
+
+<h3>Playlist: @_playlist.Name</h3>
+
+<div class="quick-links">
+    @if (_canManage)
+    {
+    <a onclick="deletePlaylist()">Delete playlist</a>
+    }
+</div>
+
+<div class="search-results">
+    @foreach (var entry in _files)
+    {
+        <MidiCard File="entry"/>
+    }
+</div>
+
+@if (_files.Count == 0)
+{
+    <p class="error-text">Playlist has no MIDIs.</p>
+}
+
+<script>
+    async function deletePlaylist() {
+        const wawa = confirm("Do you want to delete playlist? This action cannot be undone.");
+        if (!wawa)
+            return;
+
+        const response = await fetch(`/playlists?list=@_playlist.Id`, {
+            method: "DELETE",
+            headers: { "Accept": "application/json" }
+        });
+
+        if (!response.ok)
+            alert("Failed to delete playlist. Please try again.");
+
+        if (response.ok)
+            window.location.href = "/list-playlists";
+    }
+</script>
+
+@code {
+    [Parameter]
+    public Guid Guid { get; set; }
+
+    [Inject] private IFileRepository FileRepository { get; set; } = null!;
+    [Inject] private IPlaylistRepository PlaylistRepository { get; set; } = null!;
+    [Inject] private IUserRepository UserRepository { get; set; } = null!;
+
+    [CascadingParameter]
+    public User? User { get; set; }
+
+    private FileHosting.Model.Playlist? _playlist;
+    private List<UploadedFile> _files = [];
+    private bool _canManage = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _canManage = await PlaylistRepository.CanManagePlaylist(Guid, User?.Id ?? Guid.Empty);
+        if (!_canManage)
+        {
+            HttpContext.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _playlist = await PlaylistRepository.GetPlaylistOrNull(Guid);
+        if (_playlist == null)
+        {
+            HttpContext.HttpContext!.Response.StatusCode = 404;
+            return;
+        }
+
+        _files = await PlaylistRepository.EnumeratePlaylistEntriesAsync(_playlist).ToListAsync();
+    }
+}
