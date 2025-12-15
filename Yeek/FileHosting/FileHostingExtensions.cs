@@ -115,5 +115,9 @@ public static class FileHostingExtensions
         app.MapDelete("/playlists", async ([FromQuery] Guid list, FileService fileService, ClaimsPrincipal user)
                 => await fileService.DeletePlaylist(list, user))
             .RequireAuthorization();
+
+        app.MapGet("/download/playlist/{playlist:guid}", async (Guid playlist, FileService fileService)
+                => await fileService.GetPlaylistZipAsResult(playlist))
+            .RequireRateLimiting("DownloadZipPolicy");
     }
 }

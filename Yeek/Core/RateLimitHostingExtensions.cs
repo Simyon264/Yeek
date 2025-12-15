@@ -96,6 +96,25 @@ public static class RateLimitHostingExtensions
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst
                     });
             });
+
+            options.AddPolicy("DownloadZipPolicy", httpContext =>
+            {
+                var key = httpContext.User?.Identity?.Name
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "anonymous";
+
+                return RateLimitPartition.GetSlidingWindowLimiter(
+                    key,
+                    _ => new SlidingWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(10),
+                        SegmentsPerWindow = 4,
+                        AutoReplenishment = true,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                    });
+            });
         });
     }
 }

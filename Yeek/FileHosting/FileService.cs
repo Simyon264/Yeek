@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.IO.Compression;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Net.Http.Headers;
@@ -11,6 +12,7 @@ using Yeek.Security;
 using Yeek.Security.Model;
 using Yeek.Security.Repositories;
 using Yeek.WebDAV;
+using Directory = System.IO.Directory;
 
 namespace Yeek.FileHosting;
 
@@ -106,6 +108,39 @@ public class FileService
         await _fileRepository.AddDownload(fileId, DownloadType.Website);
 
         return TypedResults.PhysicalFile(Path.GetFullPath(file), entityTag: etag, fileDownloadName: fileResult.GetDownloadName());
+    }
+
+    public async Task<IResult> GetPlaylistZipAsResult(Guid playlistId)
+    {
+        var playlist = await _playlistRepository.GetPlaylistOrNull(playlistId);
+        if (playlist is null)
+            return Results.NotFound();
+
+        var zipTempFile = Path.GetTempFileName();
+
+        {
+            using var archive = ZipFile.Open(zipTempFile, ZipArchiveMode.Update);
+
+            await foreach (var file in _playlistRepository.EnumeratePlaylistEntriesAsync(playlist))
+            {
+                var filePath = Path.Combine(_fileConfiguration.UserContentDirectory, file.RelativePath);
+                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(), CompressionLevel.Optimal);
+            }
+
+            var entry = archive.CreateEntry("info.txt");
+            await using var entryStream = entry.Open();
+            await using (var writer = new StreamWriter(entryStream, Encoding.UTF8))
+            {
+                writer.WriteLine($"Archive created on {DateTime.UtcNow:O}");
+                writer.WriteLine($"Source playlist: {playlistId} - {playlist.Name}");
+                writer.WriteLine("Archive gotten from https://yeek.iterator.systems");
+            }
+
+            archive.Comment = "Created via https://yeek.iterator.systems";
+        }
+
+        return TypedResults.PhysicalFile(zipTempFile, "application/zip",
+            fileDownloadName: $"playlist_{playlist.Name}.zip");
     }
 
     public async Task<IResult> PatchFile(MidiUploadForm form, ClaimsPrincipal user)
