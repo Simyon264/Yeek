@@ -143,6 +143,40 @@ public class FileService
             fileDownloadName: $"playlist_{playlist.Name}.zip");
     }
 
+    public async Task<IResult> GetSearchResultZipAsResult(string query)
+    {
+        var files = await _fileRepository.SearchAsync(query, SearchMode.Recent, 0, int.MaxValue);
+
+        if (files.allCount == 0)
+            return Results.NotFound();
+
+        var zipTempFile = Path.GetTempFileName();
+
+        {
+            using var archive = ZipFile.Open(zipTempFile, ZipArchiveMode.Update);
+
+            foreach (var file in files.result)
+            {
+                var filePath = Path.Combine(_fileConfiguration.UserContentDirectory, file.RelativePath);
+                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(), CompressionLevel.Optimal);
+            }
+
+            var entry = archive.CreateEntry("info.txt");
+            await using var entryStream = entry.Open();
+            await using (var writer = new StreamWriter(entryStream, Encoding.UTF8))
+            {
+                writer.WriteLine($"Archive created on {DateTime.UtcNow:O}");
+                writer.WriteLine($"Source search: {query}");
+                writer.WriteLine("Archive gotten from https://yeek.iterator.systems");
+            }
+
+            archive.Comment = "Created via https://yeek.iterator.systems";
+        }
+
+        return TypedResults.PhysicalFile(zipTempFile, "application/zip",
+            fileDownloadName: $"search_{query}.zip");
+    }
+
     public async Task<IResult> PatchFile(MidiUploadForm form, ClaimsPrincipal user)
     {
         var userId = user.Claims.GetUserId();

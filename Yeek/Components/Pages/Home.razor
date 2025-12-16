@@ -42,6 +42,12 @@
         </select>
         <input type="submit" value="Search"/>
     </form>
+    <div class="quick-links">
+        @if (!string.IsNullOrWhiteSpace(_query) && _totalCount != 0)
+        {
+        <a href="/download/search?query=@HttpUtility.UrlEncode(_query)">Download Results</a>
+        }
+    </div>
 </div>
 
 @if (string.IsNullOrWhiteSpace(_query))

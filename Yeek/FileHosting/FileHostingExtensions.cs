@@ -119,5 +119,9 @@ public static class FileHostingExtensions
         app.MapGet("/download/playlist/{playlist:guid}", async (Guid playlist, FileService fileService)
                 => await fileService.GetPlaylistZipAsResult(playlist))
             .RequireRateLimiting("DownloadZipPolicy");
+
+        app.MapGet("/download/search", async ([FromQuery] string query, FileService fileService)
+                => await fileService.GetSearchResultZipAsResult(query))
+            .RequireRateLimiting("DownloadZipPolicy");
     }
 }
