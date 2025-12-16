@@ -31,7 +31,7 @@ html {
     }
 }
 
-* {
+*:not(dialog) {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -1021,28 +1021,12 @@ pre {
 
 /* Modal Window */
 .shitty-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.85);
     background: var(--bg-secondary);
     border: 1px solid var(--fg-border);
     border-radius: 12px;
     padding: 1.5rem;
-    width: 90%;
-    max-width: 450px;
     box-shadow: 0 8px 22px rgba(0,0,0,0.35);
-    opacity: 0;
-    transition:
-            opacity 0.25s ease,
-            transform 0.25s ease;
-    z-index: 1001;
-}
-
-
-.shitty-modal[show] {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    color: var(--fg-main);
 }
 
 .shitty-modal p {

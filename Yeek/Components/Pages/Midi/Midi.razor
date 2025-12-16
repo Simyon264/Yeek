@@ -163,7 +163,7 @@
     }
 </div>
 
-<div class="shitty-modal" id="modal">
+<dialog class="shitty-modal" id="modal" closedby="any">
     <p>Playlists are a way to group MIDIs together for mass-downloading or playback via WebDAV.</p>
     <div class="playlist-array" id="playlist-array">
         <p class="pwease-wait">Please wait...</p>
@@ -179,7 +179,7 @@
     <small>Checking and unchecking automatically saves.</small>
     <br/>
     <button onclick="exitModal()">Exit</button>
-</div>
+</dialog>
 
 <script defer>
     const fileId = "@_file.Id";
@@ -271,7 +271,7 @@
     }
 
     function exitModal() {
-        modal.removeAttribute("show")
+        modal.close();
     }
 
     async function createPlaylist() {
@@ -298,7 +298,7 @@
     }
 
     async function addPlaylist() {
-        modal.setAttribute("show", "");
+        modal.showModal()
         modalCreateButton.setAttribute("disabled", "");
         // We show the modal if we haven't already
 
