@@ -80,6 +80,7 @@
 <div class="midi-page-info">
     <p><strong>Author: </strong>@(_hasArtist ? _file.MostRecentRevision.ArtistName : "No Artist")</p>
     <p><strong>Album: </strong>@_file.MostRecentRevision.AlbumName</p>
+    <p><strong>File Hash: </strong><span class="hash">@_file.Hash</span></p>
     <p><strong>Downloads: </strong>@_file.TotalDownloads</p>
     <div class="midi-page-ratings">
         @{

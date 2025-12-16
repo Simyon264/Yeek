@@ -37,6 +37,9 @@ public class FileRepository : IFileRepository
             }
         }
 
+        // if our search is exactly 64 characters long and has no spaces assume it is a file hash.
+        var isHashSearch = query.Length == 64 && !query.Contains(' ');
+
         var orderBy = mode switch
         {
             SearchMode.Relevance => isEmptySearch ? "RANDOM()" : "rank DESC",
@@ -54,6 +57,12 @@ public class FileRepository : IFileRepository
             countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE uploadedby = @UploadedById AND deletedid IS NULL;";
 
             searchSql = BuildBaseSelect(orderBy, "uf.uploadedby = @UploadedById AND uf.deletedid IS NULL", true);
+        }
+        else if (isHashSearch)
+        {
+            countSql = "SELECT COUNT(*) FROM uploadedfiles WHERE hash = @Query AND deletedid IS NULL;";
+
+            searchSql = BuildBaseSelect(orderBy, "uf.hash = @Query AND uf.deletedid IS NULL", true);
         }
         else if (isEmptySearch)
         {
@@ -73,7 +82,7 @@ public class FileRepository : IFileRepository
         var allCount = await con.ExecuteScalarAsync<int>(countSql, new
         {
             Query = query,
-            UploadedById = uploadedByFilter
+            UploadedById = uploadedByFilter,
         });
 
         var rows = await FetchUploadedFilesAsync(searchSql, new
