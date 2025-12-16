@@ -47,6 +47,6 @@ public class UploadedFile
 
         sb.Add(MostRecentRevision.TrackName);
 
-        return $"{string.Join('_', sb)}.midi";
+        return $"{string.Join('_', sb)}.mid";
     }
 }
