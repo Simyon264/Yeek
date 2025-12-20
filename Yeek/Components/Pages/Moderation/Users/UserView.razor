@@ -44,11 +44,11 @@
         <p>Change trust level</p>
         <small>You can only set trust levels under you. For example if you are a moderator you can only promote to banned, normal and trusted.</small>
         <select name="trustlevel" id="trustlevel" onchange="hideunhidebanlevel()">
-            <option value="-1" name="banned">Banned</option>
-            <option value="0" name="normal" selected>Normal</option>
-            <option value="1" name="trusted">Trusted</option>
-            <option value="2" name="moderator">Moderator</option>
-            <option value="3" name="admin">Admin</option>
+            <option value="-1" name="banned" selected="@(_lookedAtUser.TrustLevel == TrustLevel.Banned)">Banned</option>
+            <option value="0" name="normal" selected="@(_lookedAtUser.TrustLevel == TrustLevel.Normal)">Normal</option>
+            <option value="1" name="trusted" selected="@(_lookedAtUser.TrustLevel == TrustLevel.Trusted)">Trusted</option>
+            <option value="2" name="moderator" selected="@(_lookedAtUser.TrustLevel == TrustLevel.Moderator)">Moderator</option>
+            <option value="3" name="admin" selected="@(_lookedAtUser.TrustLevel == TrustLevel.Admin)">Admin</option>
         </select>
         <div class="hidden" id="banlevel">
             <strong>Setting the trust level to banned will require more input. It will also create a note issued by you.</strong>
