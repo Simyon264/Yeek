@@ -60,4 +60,10 @@
       <Folder Include="data\uploads\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Components\Pages\About\About.razor" />
+      <_ContentIncludedByDefault Remove="Components\Pages\About\FAQ.razor" />
+      <_ContentIncludedByDefault Remove="Components\Pages\About\Privacy.razor" />
+    </ItemGroup>
+
 </Project>
