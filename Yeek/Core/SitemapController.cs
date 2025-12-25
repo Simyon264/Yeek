@@ -10,7 +10,7 @@ public class SitemapController : ControllerBase
 {
     private readonly IFileRepository _fileRepository;
     private const int MaxUrlsPerSitemap = 50000; // Sitemap limit
-    private readonly string[] _staticPages = ["/", "/privacy", "/about", "/faq"];
+    private readonly string[] _staticPages = ["/"];
 
     public SitemapController(IFileRepository fileRepository)
     {
@@ -90,7 +90,7 @@ public class SitemapController : ControllerBase
             var file = await _fileRepository.GetUploadedFileAsync(fileId);
 
             sb.AppendLine("  <url>");
-            sb.AppendLine($"    <loc>{Request.Scheme}://{Request.Host}/{file.Id}</loc>");
+            sb.AppendLine($"    <loc>{Request.Scheme}://{Request.Host}/{file.GetMetaUrl()}</loc>");
             sb.AppendLine($"    <lastmod>{file.MostRecentRevision.UpdatedOn:yyyy-MM-dd}</lastmod>");
             sb.AppendLine("    <changefreq>weekly</changefreq>");
             sb.AppendLine("    <priority>0.9</priority>");

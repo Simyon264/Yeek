@@ -1,4 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text;
+using System.Text.Encodings.Web;
+using JetBrains.Annotations;
+using Yeek.Core;
 
 namespace Yeek.FileHosting.Model;
 
@@ -33,6 +37,58 @@ public class UploadedFile
     public int? DeletedId { get; set; }
 
     public FileRevision MostRecentRevision => FileRevisions.First();
+
+    /// <summary>
+    /// Gets a "short" id based of the actual ID. This is guaranteed to be unique based on the actual ID.
+    /// </summary>
+    public string GetShortId()
+        => UploadedFile.GetShortId(Id);
+
+    /// <inheritdoc cref="GetShortId()"/>
+    public static string GetShortId(Guid id)
+    {
+        const int length = 7;
+
+        var bytes = id.ToByteArray();
+
+        var base64 = Convert.ToBase64String(bytes);
+
+        base64 = base64
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+
+        return base64[..length];
+    }
+
+    public string GetMetaUrl(int rev = -1)
+    {
+        if (FileRevisions.Count == 0)
+            throw new InvalidOperationException("Can't get meta url on incomplete file");
+
+        var revision = MostRecentRevision;
+        if (rev != -1)
+        {
+            revision = FileRevisions.ElementAt(rev);
+        }
+
+        var sb = new List<string>();
+        sb.Add(GetShortId());
+        if (revision.ArtistName != null)
+            sb.Add(SlugHelper.GenerateSlug(revision.ArtistNames[0]));
+        else
+            sb.Add("-");
+
+        if (revision.AlbumName != null)
+            sb.Add(SlugHelper.GenerateSlug(revision.AlbumName, 40));
+        else
+            sb.Add("-");
+
+        sb.Add(SlugHelper.GenerateSlug(revision.TrackName));
+
+        return string.Join('/', sb);
+    }
+
 
     public string GetDownloadName()
     {

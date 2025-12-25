@@ -1,4 +1,7 @@
 ﻿@page "/{Guid:guid}"
+@page "/{ShortId}/"
+@page "/{ShortId}/{Author}/{Album}/{TrackName}"
+
 @using System.Text.Encodings.Web
 @using Yeek.FileHosting
 @using Yeek.FileHosting.Model
@@ -7,6 +10,7 @@
 @using Yeek.Security.Repositories
 
 @inject IHttpContextAccessor HttpContext
+@inject NavigationManager NavigationManager
 
 @if (_file == null || _uploadedBy == null)
 {
@@ -73,13 +77,17 @@
     }
 
     <meta property="og:description" content="@finalDescription"/>
+    @code {
+        string Origin => new Uri(NavigationManager.BaseUri).GetLeftPart(UriPartial.Authority);
+    }
+    <link rel="canonical" href="@Origin/@_file.GetMetaUrl()" />
 </OpenGraph>
 
 <h4>@_file.MostRecentRevision.TrackName</h4>
 
 <div class="midi-page-info">
     <p><strong>Author: </strong>@(_hasArtist ? _file.MostRecentRevision.ArtistName : "No Artist")</p>
-    <p><strong>Album: </strong>@_file.MostRecentRevision.AlbumName</p>
+    <p><strong>Album: </strong>@(_hasAlbum ? _file.MostRecentRevision.AlbumName : "No Album")</p>
     <p><strong>File Hash: </strong><span class="hash">@_file.Hash</span></p>
     <p><strong>Downloads: </strong>@_file.TotalDownloads</p>
     <div class="midi-page-ratings">
@@ -120,7 +128,7 @@
     </div>
 
     <p class="midi-page-description respect-newlines">
-        @_file.MostRecentRevision.Description
+        @(_hasDescription ? _file.MostRecentRevision.Description : "No description provided.")
     </p>
     <p class="midi-page-uploaded-by">
         Uploaded by: <UserNametag User="_uploadedBy"/>
@@ -162,6 +170,7 @@
     {
         <a href="/moderation/takedown/new?item=@_file.Id">MOD: Delete Content</a>
     }
+    <a onclick="copyPermalink(this)">Copy Permalink</a>
 </div>
 
 <dialog class="shitty-modal" id="modal" closedby="any">
@@ -346,11 +355,36 @@
             alert("Failed adding or removing, please refresh and try again.")
         }
     }
+
+    let activeCopyTimer = null;
+    async function copyPermalink(element) {
+        await navigator.clipboard.writeText(`${window.location.origin}/${fileId}`);
+        element.innerHTML = "Copied!";
+        if (activeCopyTimer) {
+            clearTimeout(activeCopyTimer);
+        }
+        activeCopyTimer = setTimeout(() => { element.innerHTML = "Copy Permalink"; activeCopyTimer = null; }, 1000);
+    }
+
+    const metaUrl = "@_file.GetMetaUrl()"
+    history.replaceState(null, "", metaUrl);
 </script>
 
 @code {
     [Parameter]
-    public Guid Guid { get; set; }
+    public Guid? Guid { get; set; }
+
+    [Parameter]
+    public string? ShortId { get; set; }
+
+    [Parameter]
+    public string? Author { get; set; }
+
+    [Parameter]
+    public string? Album { get; set; }
+
+    [Parameter]
+    public string? TrackName { get; set; }
 
     [Inject] private IFileRepository FileRepository { get; set; } = null!;
     [Inject] private IUserRepository UserRepository { get; set; } = null!;
@@ -370,24 +404,35 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        var fileIsReal = await FileRepository.FileExistsAsync(Guid);
+        var canonGuid = Guid;
+        // ok for some bullshit reason this handler runs TWICE and leads to race conditions of the parameter Guid being set, twice. To null. guh.
+        if (!canonGuid.HasValue)
+        {
+            canonGuid = await ResolveFile();
+            if (!canonGuid.HasValue)
+            {
+                HttpContext.HttpContext!.Response.StatusCode = 404;
+                return;
+            }
+        }
+
+        var fileIsReal = await FileRepository.FileExistsAsync(canonGuid.Value);
         if (!fileIsReal)
         {
             HttpContext.HttpContext!.Response.StatusCode = 404;
             return;
         }
 
-        _fileDeletionReason = await FileRepository.GetDeletionStatusAsync(Guid);
+        _fileDeletionReason = await FileRepository.GetDeletionStatusAsync(canonGuid.Value);
         if (_fileDeletionReason != null)
             return;
 
-        _file = await FileRepository.GetUploadedFileAsync(Guid);
-        _filePreview = await FileRepository.GetFilePreviewOrNullAsync(Guid);
+        _file = await FileRepository.GetUploadedFileAsync(canonGuid.Value);
+        _filePreview = await FileRepository.GetFilePreviewOrNullAsync(canonGuid.Value);
         _uploadedBy = await UserRepository.GetUserAsync(_file.UploadedById)!;
 
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.Description))
         {
-            _file.MostRecentRevision.Description = "No description provided.";
             _hasDescription = false;
         }
 
@@ -398,16 +443,83 @@
 
         if (string.IsNullOrWhiteSpace(_file.MostRecentRevision.AlbumName))
         {
-            _file.MostRecentRevision.AlbumName = "No album";
             _hasAlbum = false;
         }
 
         if (User is not null)
         {
-            var userScore = await FileRepository.GetRatingForUserForFileAsync(Guid, User.Id);
+            var userScore = await FileRepository.GetRatingForUserForFileAsync(canonGuid.Value, User.Id);
             _userScore = userScore ?? 0;
         }
 
         HttpContext.HttpContext!.Response.StatusCode = 200;
+    }
+
+    private async Task<Guid?> ResolveFile()
+    {
+        // we need to find the file id based on the short id.
+        if (ShortId == null)
+        {
+            // well fuck, bye bye
+            return null;
+        }
+
+        Guid? foundGuid = null;
+
+        var allFileIds = await FileRepository.GetAllIdsAsync(true);
+        foreach (var fileId in allFileIds)
+        {
+            if (UploadedFile.GetShortId(fileId) != ShortId)
+                continue;
+
+            foundGuid = fileId;
+            break;
+        }
+
+        if (!foundGuid.HasValue)
+            return null;
+
+        // We have a match, we now need to ensure the other properties are like, real.
+        var file = await FileRepository.GetUploadedFileAsync(foundGuid.Value);
+        var revisionsCount = (await FileRepository.GetRevisionsAsync(foundGuid.Value)).Count;
+        // this is basically a bunch of shitcode, all because i dont want to touch more db code to make a method that returns all FileRevisions in a file.
+        // so what I do here is manually fill out the file revisions.
+        // lol, lmao.
+        var shittyRevisionsList = new FileRevision[revisionsCount];
+        for (var i = 0; i < revisionsCount; i++)
+        {
+            shittyRevisionsList[i] =
+                (await FileRepository.GetUploadedFileWithSpecificRevisionAsync(foundGuid.Value, i)).MostRecentRevision;
+        }
+
+        // TODO: like, dont do this.
+        file.FileRevisions = shittyRevisionsList;
+
+        // This is all just to test if the given parameters we have actually ever would match to a url we generated
+
+        var ourUrlSb = new List<string>();
+        ourUrlSb.Add(ShortId);
+
+        if (Author != null)
+            ourUrlSb.Add(Author);
+        else
+            ourUrlSb.Add("-");
+        if (Album != null)
+            ourUrlSb.Add(Album);
+        else
+            ourUrlSb.Add("-");
+        if (TrackName != null)
+            ourUrlSb.Add(TrackName);
+        else
+            ourUrlSb.Add("-");
+
+        var ourUrl = string.Join('/', ourUrlSb);
+        for (var i = 0; i < file.FileRevisions.Count; i++)
+        {
+            if (ourUrl == file.GetMetaUrl(i))
+                return foundGuid.Value;
+        }
+
+        return null;
     }
 }

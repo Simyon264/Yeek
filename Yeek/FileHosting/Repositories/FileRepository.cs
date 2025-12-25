@@ -686,15 +686,27 @@ public class FileRepository : IFileRepository
         await con.ExecuteAsync(sql, new { UserId = userId, FileId = fileId });
     }
 
-    public async Task<Guid[]> GetAllIdsAsync()
+    public async Task<Guid[]> GetAllIdsAsync(bool includeDeleted = false)
     {
         const string sql = """
                            SELECT id FROM uploadedfiles
                            WHERE deletedid IS NULL;
                            """;
 
-        await using var con = await _context.DataSource.OpenConnectionAsync();
-        return (await con.QueryAsync<Guid>(sql)).ToArray();
+        const string sqlButNot = """
+                                 SELECT id FROM uploadedfiles
+                                 """;
+
+        if (includeDeleted)
+        {
+            await using var con = await _context.DataSource.OpenConnectionAsync();
+            return (await con.QueryAsync<Guid>(sqlButNot)).ToArray();
+        }
+        else
+        {
+            await using var con = await _context.DataSource.OpenConnectionAsync();
+            return (await con.QueryAsync<Guid>(sql)).ToArray();
+        }
     }
 
     public async Task EditFileAsync(Guid fileId, FileRevision fileRevision)

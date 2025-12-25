@@ -45,7 +45,7 @@ public interface IFileRepository
 
     public Task RemoveRatingAsync(Guid fileId, Guid userId);
 
-    public Task<Guid[]> GetAllIdsAsync();
+    public Task<Guid[]> GetAllIdsAsync(bool includeDeleted = false);
     Task EditFileAsync(Guid fileId, FileRevision fileRevision);
 
     public Task<FilePreview?> GetFilePreviewOrNullAsync(Guid fileId);
