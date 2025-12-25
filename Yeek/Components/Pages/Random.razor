@@ -1,0 +1,23 @@
+﻿@page "/random"
+@using Yeek.FileHosting.Model
+@using Yeek.FileHosting.Repositories
+<p>Contains a bunch of random files. Nothing more. 64 of them, actually.</p>
+<p>This was requested on Discord.</p>
+
+<div class="search-results">
+    @foreach (var uploadedFile in _randomFiles)
+    {
+        <MidiCard File="uploadedFile"/>
+    }
+</div>
+
+@code {
+    private List<UploadedFile> _randomFiles = [];
+
+    [Inject] private IFileRepository FileRepository { get; set; } = null!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _randomFiles = await FileRepository.GetRandomMidis(64);
+    }
+}
