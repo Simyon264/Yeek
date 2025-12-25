@@ -20,6 +20,7 @@
             @switch (_sortBy)
             {
                 // There is a better way to do this. I don't care.
+                default:
                 case "relevance":
                     <option value="relevance" selected>Relevance</option>
                     <option value="top">Top Rated</option>
@@ -32,7 +33,6 @@
                     <option value="recent">Most Recent</option>
                     break;
 
-                default:
                 case "recent":
                     <option value="relevance">Relevance</option>
                     <option value="top">Top Rated</option>
@@ -138,7 +138,7 @@ function jumpToPage(maxPages) {
     private string? _query;
 
     private int _totalCount;
-    private string _sortBy = "recent";
+    private string _sortBy = "relevance";
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = null!;

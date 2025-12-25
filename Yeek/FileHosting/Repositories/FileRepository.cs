@@ -42,7 +42,7 @@ public class FileRepository : IFileRepository
 
         var orderBy = mode switch
         {
-            SearchMode.Relevance => isEmptySearch ? "RANDOM()" : "rank DESC",
+            SearchMode.Relevance => isEmptySearch ? "uf.uploadedon DESC" : "rank DESC",
             SearchMode.Top => "COALESCE(r.rating, 0) DESC",
             SearchMode.Recent => "uf.uploadedon DESC",
             _ => isEmptySearch ? "RANDOM()" : "rank DESC"
