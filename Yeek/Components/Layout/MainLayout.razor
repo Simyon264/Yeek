@@ -120,7 +120,7 @@
             <small>Wanna take a chance?</small>
             @foreach (var uploadedFile in _randomMidis)
             {
-                <a class="random-midi" href="@uploadedFile.Id.ToString("D")">
+                <a class="random-midi" href="@uploadedFile.GetMetaUrl()">
                     <strong>@uploadedFile.MostRecentRevision.TrackName</strong>
                     @if (!string.IsNullOrWhiteSpace(uploadedFile.MostRecentRevision.ArtistName))
                     {
