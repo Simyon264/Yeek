@@ -1,0 +1,99 @@
+﻿@page "/midi-to-audio"
+
+<h3>MIDI to MP3</h3>
+
+<PageTitle>Yeek - MIDI to MP3 Converter</PageTitle>
+
+<OpenGraph>
+    <meta property="og:title" content="Yeek - MIDI to MP3"/>
+    <meta property="og:description" content="Convert MIDIs to MP3 or OGG."/>
+    <meta property="og:type" content="website"/>
+</OpenGraph>
+
+<p>Convert a MIDI file into MP3 or OGG using the input field below. It may take a minute to generate the file.</p>
+<small>Previews will be made using the GeneralUser2 SoundFont.</small>
+
+<form>
+    <input type="file" id="file" name="file" accept=".midi,.mid,.MID,.MIDI"/>
+    <select>
+        <option value=".ogg">.ogg (OGG Vorbis)</option>
+        <option value=".mp3">.mp3 (MP3)</option>
+        <option value=".m4a">.m4a (AAC (in MP4 container))</option>
+        <option value=".webm">.webm (WebM (Opus codec))</option>
+    </select>
+</form>
+
+<p class="error-text hidden" id="error-text"></p>
+<div id="result" class="quick-links hidden"></div>
+
+<div class="quick-links">
+    <button onclick="convert()" id="convert">Convert</button>
+</div>
+
+<script>
+    const fileInput = document.getElementById("file");
+    const formatSelect = document.querySelector("select");
+    const errorText = document.getElementById("error-text");
+    const result = document.getElementById("result");
+    const convertButton = document.getElementById("convert");
+
+    async function convert() {
+        errorText.classList.add("hidden");
+        errorText.textContent = "";
+        result.classList.add("hidden");
+        result.innerHTML = "";
+        convertButton.disabled = true;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            errorText.textContent = "Please select a MIDI file.";
+            errorText.classList.remove("hidden");
+            convertButton.disabled = false;
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const format = formatSelect.value;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch(`/download/convert?format=${encodeURIComponent(format)}`, {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                const message = await response.text();
+                throw new Error(message || "Conversion failed.");
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+
+            const audio = document.createElement("audio");
+            audio.controls = true;
+            audio.src = url;
+            audio.style.display = "block";
+            audio.style.marginTop = "1rem";
+
+            const download = document.createElement("a");
+            download.href = url;
+            download.download = `${file.name}${format}`;
+            download.textContent = "Download";
+            download.style.display = "inline-block";
+            download.style.marginTop = "0.5rem";
+
+            result.appendChild(audio);
+            result.appendChild(download);
+            result.classList.remove("hidden");
+            convertButton.disabled = false;
+        }
+        catch (err) {
+            errorText.textContent = err.message;
+            errorText.classList.remove("hidden");
+            convertButton.disabled = false;
+        }
+    }
+</script>
+

@@ -10,7 +10,7 @@ public class SitemapController : ControllerBase
 {
     private readonly IFileRepository _fileRepository;
     private const int MaxUrlsPerSitemap = 50000; // Sitemap limit
-    private readonly string[] _staticPages = ["/"];
+    private readonly string[] _staticPages = ["/", "/midi-to-audio"];
 
     public SitemapController(IFileRepository fileRepository)
     {

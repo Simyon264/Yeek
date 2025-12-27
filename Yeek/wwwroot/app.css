@@ -609,7 +609,7 @@ nav.links {
     margin-top: 0.5rem;
 }
 
-.quick-links a {
+.quick-links a,button {
     background-color: var(--bg-main);
     border: 1px solid var(--fg-border);
     padding: 5px 10px;
@@ -619,9 +619,13 @@ nav.links {
     transition: background 0.2s, color 0.2s;
 }
 
-.quick-links a:hover {
+.quick-links a:hover,button:hover {
     background-color: var(--fg-link-normal);
     color: var(--bg-main);
+}
+
+.quick-links button:disabled {
+    cursor: not-allowed;
 }
 
 h3 {

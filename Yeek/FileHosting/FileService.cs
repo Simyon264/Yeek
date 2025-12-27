@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Net.Http.Headers;
-using TickerQ.Utilities.Base;
 using Yeek.Configuration;
 using Yeek.FileHosting.JavaScript;
 using Yeek.FileHosting.Model;
@@ -12,7 +11,6 @@ using Yeek.Security;
 using Yeek.Security.Model;
 using Yeek.Security.Repositories;
 using Yeek.WebDAV;
-using Directory = System.IO.Directory;
 
 namespace Yeek.FileHosting;
 
@@ -26,8 +24,11 @@ public class FileService
     private readonly WebDavManager _webDavManager;
     private readonly ScriptService _scriptService;
     private readonly IPlaylistRepository _playlistRepository;
+    private readonly MidiService _midiService;
 
-    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger, WebDavManager webDavManager, IUserRepository userRepository, ScriptService scriptService, IPlaylistRepository playlistRepository)
+    public FileService(IFileRepository context, IConfiguration configuration, ILogger<FileService> logger,
+        WebDavManager webDavManager, IUserRepository userRepository, ScriptService scriptService,
+        IPlaylistRepository playlistRepository, MidiService midiService) // kill me please
     {
         _logger = logger;
         _fileRepository = context;
@@ -35,6 +36,7 @@ public class FileService
         _userRepository = userRepository;
         _scriptService = scriptService;
         _playlistRepository = playlistRepository;
+        _midiService = midiService;
         configuration.Bind(FileConfiguration.Name, _fileConfiguration);
         configuration.Bind(JavaScriptConfiguration.Name, _javaScriptConfiguration);
     }
@@ -522,6 +524,33 @@ public class FileService
         await _playlistRepository.DeletePlaylist(playlistId);
         _webDavManager.PlaylistDeletes.Add(playlistId);
         return Results.Ok();
+    }
+
+    public async Task<IResult> GetConvertStream(string format, IFormFile file, HttpContext ctx)
+    {
+        if (file.Length > _fileConfiguration.MaxUploadSize)
+            return Results.BadRequest($"Maximum upload size exceeded. > {_fileConfiguration.MaxUploadSize}");
+
+        await using var ms = new MemoryStream();
+        await using (var stream = file.OpenReadStream())
+        {
+            await stream.CopyToAsync(ms);
+        }
+
+        ms.Position = 0;
+
+        if (!MidiService.IsMidiFileAMidiFile(ms))
+            return Results.BadRequest("File is not a MIDI file.");
+
+        try
+        {
+            var stream = await _midiService.GeneratePreviewForFile(ms, format);
+            return Results.File(stream, fileDownloadName: $"{file.FileName}{format}");
+        }
+        catch (FormatException e)
+        {
+            return Results.BadRequest(e.Message);
+        }
     }
 
     private static string CalculateHash(MemoryStream stream)

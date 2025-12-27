@@ -1,4 +1,5 @@
-﻿using FFMpegCore;
+﻿using System.Diagnostics.CodeAnalysis;
+using FFMpegCore;
 using NFluidsynth;
 using TickerQ.Utilities.Base;
 using Yeek.Configuration;
@@ -22,6 +23,17 @@ public class MidiService
         //".m4a", // AAC (in MP4 container)
         ".ogg",  // OGG Vorbis (mono for admemes)
         ".mp3", // Fallback
+    ];
+
+    /// <summary>
+    /// Extensions supported by the <see cref="GeneratePreviewForFile"/> method.
+    /// </summary>
+    private static readonly List<string> SupportedExtensions =
+    [
+        ".webm",
+        ".m4a",
+        ".ogg",
+        ".mp3"
     ];
 
     public MidiService(IFileRepository context, ILogger<MidiService> logger, IConfiguration configuration)
@@ -76,6 +88,67 @@ public class MidiService
         }
     }
 
+    /// <summary>
+    /// Generates a single preview for a file. This is an entirely in-mem operation that only ever uses temporary files for the audio output.
+    /// </summary>
+    /// <remarks>Waits for the lock to open to avoid strain.</remarks>
+    /// <returns>Returns a read-stream for the temporary output file.</returns>
+    public async Task<Stream> GeneratePreviewForFile(MemoryStream file, string format)
+    {
+        if (!SupportedExtensions.Contains(format))
+            throw new FormatException("Unsupported output format");
+
+        await Lock.WaitAsync();
+
+        var tempMidiPath = Path.GetTempFileName() + ".mid";
+        var tempOutPath = Path.GetTempFileName() + format;
+
+        try
+        {
+            // Write MIDI to temp file
+            file.Position = 0;
+            await using (var fs = File.OpenWrite(tempMidiPath))
+            {
+                await file.CopyToAsync(fs);
+            }
+
+            SetupSynth(out var settings, out var synth);
+            using var settings1 = settings;
+            using var synth1 = synth;
+
+            var wavPath = RenderMidiToWav(settings, synth, tempMidiPath);
+            await ConvertAudio(format, wavPath, tempOutPath);
+
+            return new FileStream(
+                tempOutPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 4096,
+                FileOptions.DeleteOnClose);
+        }
+        finally
+        {
+            Lock.Release();
+
+            TryDeleteFile(tempMidiPath);
+            TryDeleteFile(tempOutPath);
+        }
+    }
+
+    private static void TryDeleteFile(string file)
+    {
+        try
+        {
+            if (File.Exists(file))
+                File.Delete(file);
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
     [TickerFunction(functionName: "GeneratePreviews", cronExpression: "*/2 * * * *")]
     public async Task GeneratePreviews(CancellationToken token)
     {
@@ -102,26 +175,9 @@ public class MidiService
             _logger.LogInformation("Generating previews for {count} files!", filesToProcess.Length);
 
 
-            using var settings = new Settings();
-            // use number of samples processed as timing source, rather than the system timer
-            settings["player.timing-source"].StringValue = "sample";
-            // since this is a non-realtime scenario, there is no need to pin the sample data
-            settings["synth.lock-memory"].IntValue = 0;
-            settings["synth.midi-bank-select"].StringValue = "gm";
-
-            // Recommended settings, gotten from https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/README.md#302-fluidsynth
-            settings["synth.reverb.damp"].DoubleValue = 0.3;
-            settings["synth.reverb.level"].DoubleValue = 0.7;
-            settings["synth.reverb.room-size"].DoubleValue = 0.5;
-            settings["synth.reverb.width"].DoubleValue = 0.8;
-            settings["synth.chorus.depth"].DoubleValue = 3.6;
-            settings["synth.chorus.level"].DoubleValue = 0.55;
-            settings["synth.chorus.nr"].IntValue = 4;
-            settings["synth.chorus.speed"].DoubleValue = 0.36;
-
-            using var synth = new Synth(settings);
-
-            synth.LoadSoundFont(Path.GetFullPath(_fileConfiguration.SoundFontPath), false);
+            SetupSynth(out var settings, out var synth);
+            using var settings1 = settings;
+            using var synth1 = synth;
 
             foreach (var fileId in filesToProcess)
             {
@@ -159,61 +215,13 @@ public class MidiService
                     continue;
                 }
 
-                var wavPath = Path.GetTempFileName() + ".wav";
-                settings["audio.file.name"].StringValue = wavPath;
-                using (var player = new Player(synth))
-                {
-                    player.Add(file);
-                    player.Play();
-
-                    using (var renderer = new FileRenderer(synth))
-                    {
-                        while (player.Status == FluidPlayerStatus.Playing)
-                        {
-                            renderer.ProcessBlock();
-                        }
-                    }
-                }
+                var wavPath = RenderMidiToWav(settings, synth, file);
 
                 foreach (var ext in missingExts)
                 {
                     var outputPath = Path.Combine(_fileConfiguration.UserContentDirectory, $"{fileId}{ext}");
 
-                    switch (ext)
-                    {
-                        case ".webm":
-                            await FFMpegArguments
-                                .FromFileInput(wavPath)
-                                .OutputToFile(outputPath, overwrite: true, options => options
-                                    .WithAudioCodec("libopus"))
-                                .ProcessAsynchronously();
-                            break;
-
-                        case ".m4a":
-                            await FFMpegArguments
-                                .FromFileInput(wavPath)
-                                .OutputToFile(outputPath, overwrite: true, options => options
-                                    .WithAudioCodec("aac"))
-                                .ProcessAsynchronously();
-                            break;
-
-                        case ".mp3":
-                            await FFMpegArguments
-                                .FromFileInput(wavPath)
-                                .OutputToFile(outputPath, overwrite: true, options => options
-                                    .WithAudioCodec("libmp3lame"))
-                                .ProcessAsynchronously();
-                            break;
-
-                        case ".ogg":
-                            await FFMpegArguments
-                                .FromFileInput(wavPath)
-                                .OutputToFile(outputPath, overwrite: true, options => options
-                                    .WithAudioCodec("libvorbis")
-                                    .WithCustomArgument("-ac 1")) // forces mono
-                                .ProcessAsynchronously();
-                            break;
-                    }
+                    await ConvertAudio(ext, wavPath, outputPath);
                 }
 
                 // Cleanup
@@ -236,6 +244,101 @@ public class MidiService
         {
             Lock.Release();
         }
+    }
+
+    private void SetupSynth([NotNull] out Settings? settings, [NotNull] out Synth? synth)
+    {
+        settings = null;
+        synth = null;
+        try
+        {
+            settings = new Settings();
+            // use number of samples processed as timing source, rather than the system timer
+            settings["player.timing-source"].StringValue = "sample";
+            // since this is a non-realtime scenario, there is no need to pin the sample data
+            settings["synth.lock-memory"].IntValue = 0;
+            settings["synth.midi-bank-select"].StringValue = "gm";
+
+            // Recommended settings, gotten from https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/README.md#302-fluidsynth
+            settings["synth.reverb.damp"].DoubleValue = 0.3;
+            settings["synth.reverb.level"].DoubleValue = 0.7;
+            settings["synth.reverb.room-size"].DoubleValue = 0.5;
+            settings["synth.reverb.width"].DoubleValue = 0.8;
+            settings["synth.chorus.depth"].DoubleValue = 3.6;
+            settings["synth.chorus.level"].DoubleValue = 0.55;
+            settings["synth.chorus.nr"].IntValue = 4;
+            settings["synth.chorus.speed"].DoubleValue = 0.36;
+
+            synth = new Synth(settings);
+
+            synth.LoadSoundFont(Path.GetFullPath(_fileConfiguration.SoundFontPath), false);
+        }
+        catch
+        {
+            synth?.Dispose();
+            settings?.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task ConvertAudio(string ext, string wavPath, string outputPath)
+    {
+        switch (ext)
+        {
+            case ".webm":
+                await FFMpegArguments
+                    .FromFileInput(wavPath)
+                    .OutputToFile(outputPath, overwrite: true, options => options
+                        .WithAudioCodec("libopus"))
+                    .ProcessAsynchronously();
+                break;
+
+            case ".m4a":
+                await FFMpegArguments
+                    .FromFileInput(wavPath)
+                    .OutputToFile(outputPath, overwrite: true, options => options
+                        .WithAudioCodec("aac"))
+                    .ProcessAsynchronously();
+                break;
+
+            case ".mp3":
+                await FFMpegArguments
+                    .FromFileInput(wavPath)
+                    .OutputToFile(outputPath, overwrite: true, options => options
+                        .WithAudioCodec("libmp3lame"))
+                    .ProcessAsynchronously();
+                break;
+
+            case ".ogg":
+                await FFMpegArguments
+                    .FromFileInput(wavPath)
+                    .OutputToFile(outputPath, overwrite: true, options => options
+                        .WithAudioCodec("libvorbis")
+                        .WithCustomArgument("-ac 1")) // forces mono
+                    .ProcessAsynchronously();
+                break;
+        }
+    }
+
+    private static string RenderMidiToWav(Settings settings, Synth synth, string filePath)
+    {
+        var wavPath = Path.GetTempFileName() + ".wav";
+        settings["audio.file.name"].StringValue = wavPath;
+        using (var player = new Player(synth))
+        {
+            player.Add(filePath);
+            player.Play();
+
+            using (var renderer = new FileRenderer(synth))
+            {
+                while (player.Status == FluidPlayerStatus.Playing)
+                {
+                    renderer.ProcessBlock();
+                }
+            }
+        }
+
+        return wavPath;
     }
 
     public static bool IsMidiFileAMidiFile(MemoryStream stream)

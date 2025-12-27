@@ -123,5 +123,10 @@ public static class FileHostingExtensions
         app.MapGet("/download/search", async ([FromQuery] string query, FileService fileService)
                 => await fileService.GetSearchResultZipAsResult(query))
             .RequireRateLimiting("DownloadZipPolicy");
+
+        app.MapPost("/download/convert",
+                async ([FromQuery] string format, IFormFile file, HttpContext ctx, FileService fileService)
+                    => await fileService.GetConvertStream(format, file, ctx))
+            .DisableAntiforgery();
     }
 }
