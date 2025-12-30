@@ -112,12 +112,12 @@
     </nav>
 </header>
 
-<main class="main">
-    <div class="content">
+<div class="main">
+    <main class="content">
         <CascadingValue Value="User" TValue="User">
             @Body
         </CascadingValue>
-    </div>
+    </main>
     <div class="sidebar">
         <div class="random-midis">
             <small>Wanna take a chance?</small>
@@ -169,7 +169,7 @@
             }
         </div>
     </div>
-</main>
+</div>
 
 @if (!string.IsNullOrEmpty(ServerConfiguration.Value.PlausibleSnippet))
 {
