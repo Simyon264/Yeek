@@ -86,7 +86,7 @@ public class FileService
 
 
         return TypedResults.PhysicalFile(Path.GetFullPath(file),
-            fileDownloadName: uploadedFile.GetDownloadName() + $".{extension}",
+            fileDownloadName: uploadedFile.GetDownloadName(true) + $".{extension}",
             contentType: extension.GetContentTypeForExtension());
     }
 
@@ -109,7 +109,7 @@ public class FileService
         var etag = new EntityTagHeaderValue($"\"{fileResult.Hash}\"");
         await _fileRepository.AddDownload(fileId, DownloadType.Website);
 
-        return TypedResults.PhysicalFile(Path.GetFullPath(file), entityTag: etag, fileDownloadName: fileResult.GetDownloadName());
+        return TypedResults.PhysicalFile(Path.GetFullPath(file), entityTag: etag, fileDownloadName: fileResult.GetDownloadName(true));
     }
 
     public async Task<IResult> GetPlaylistZipAsResult(Guid playlistId)
@@ -126,7 +126,7 @@ public class FileService
             await foreach (var file in _playlistRepository.EnumeratePlaylistEntriesAsync(playlist))
             {
                 var filePath = Path.Combine(_fileConfiguration.UserContentDirectory, file.RelativePath);
-                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(), CompressionLevel.Optimal);
+                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(true), CompressionLevel.Optimal);
             }
 
             var entry = archive.CreateEntry("info.txt");
@@ -160,7 +160,7 @@ public class FileService
             foreach (var file in files.result)
             {
                 var filePath = Path.Combine(_fileConfiguration.UserContentDirectory, file.RelativePath);
-                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(), CompressionLevel.Optimal);
+                archive.CreateEntryFromFile(Path.GetFullPath(filePath), file.GetDownloadName(true), CompressionLevel.Optimal);
             }
 
             var entry = archive.CreateEntry("info.txt");

@@ -90,7 +90,7 @@ public class UploadedFile
     }
 
 
-    public string GetDownloadName()
+    public string GetDownloadName(bool includeId = false)
     {
         if (FileRevisions.Count == 0)
             throw new InvalidOperationException("Can't get download name on incomplete file.");
@@ -103,6 +103,9 @@ public class UploadedFile
 
         sb.Add(MostRecentRevision.TrackName);
 
-        return $"{string.Join('_', sb)}.mid";
+        var id = string.Empty;
+        if (includeId)
+            id = $" ({GetShortId()})";
+        return $"{string.Join('_', sb)}{id}.mid";
     }
 }
