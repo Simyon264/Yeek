@@ -45,6 +45,7 @@ public class FileRepository : IFileRepository
             SearchMode.Relevance => isEmptySearch ? "uf.uploadedon DESC" : "rank DESC",
             SearchMode.Top => "COALESCE(r.rating, 0) DESC",
             SearchMode.Recent => "uf.uploadedon DESC",
+            SearchMode.Downloads => "uf.downloads DESC",
             _ => isEmptySearch ? "RANDOM()" : "rank DESC"
         };
 
