@@ -67,4 +67,16 @@ public class JsFile
 
         _scriptContext.Updates.Add(Id, new QueuedUpdate(name, albumName, artistNames.ToHostArray<string>(), description, changeSummary));
     }
+
+    /// <summary>
+    /// Deletes the given file.
+    /// </summary>
+    [UsedImplicitly]
+    public void Delete(bool allowReupload, int reason)
+    {
+        if (_scriptContext.Deletions.ContainsKey(Id))
+            throw new InvalidOperationException("File already marked for deletion");
+
+        _scriptContext.Deletions.Add(Id, new JsDeletion(allowReupload, (DeletionReason)reason));
+    }
 }

@@ -1,8 +1,10 @@
 ﻿using Dapper;
 using Yeek.Database;
+using Yeek.FileHosting.JavaScript;
 using Yeek.FileHosting.Model;
 using Yeek.Security.Model;
 using Yeek.Security.Repositories;
+using Yeek.WebDAV;
 
 namespace Yeek.FileHosting.Repositories;
 
@@ -11,12 +13,14 @@ public class FileRepository : IFileRepository
     private readonly ApplicationDbContext _context;
     private readonly ILogger<FileRepository> _logger;
     private readonly IModerationRepository _moderationRepository;
+    private readonly WebDavManager _webDavManager;
 
-    public FileRepository(ApplicationDbContext dbContext, ILogger<FileRepository> logger, IModerationRepository moderationRepository)
+    public FileRepository(ApplicationDbContext dbContext, ILogger<FileRepository> logger, IModerationRepository moderationRepository, WebDavManager webDavManager)
     {
         _context = dbContext;
         _logger = logger;
         _moderationRepository = moderationRepository;
+        _webDavManager = webDavManager;
     }
 
     public async Task<(List<UploadedFile> result, int allCount, int pageCount)> SearchAsync(
@@ -524,7 +528,7 @@ public class FileRepository : IFileRepository
         return result.FirstOrDefault();
     }
 
-    public async Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, string script, Guid editId, bool apply)
+    public async Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, Dictionary<Guid, JsDeletion> deletions, string script, Guid editId, bool apply)
     {
         const string nextRevisionSql = """
                                        SELECT MAX(revisionid)
@@ -575,6 +579,12 @@ public class FileRepository : IFileRepository
                     revision.ChangeSummary,
                     HistoryId = editId
                 }, transaction);
+            }
+
+            foreach (var (fileId, deletion) in deletions)
+            {
+                await DeleteFile(fileId, deletion.AllowReupload, deletion.Reason, user);
+                _webDavManager.Deletes.Add(fileId);
             }
         }
 

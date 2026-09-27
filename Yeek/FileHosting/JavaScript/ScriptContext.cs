@@ -20,6 +20,7 @@ public class ScriptContext
     private readonly Dictionary<Guid, JsUser> _userCache = [];
     private readonly Dictionary<Guid, JsFile> _fileCache = [];
     internal readonly Dictionary<Guid, QueuedUpdate> Updates = [];
+    internal readonly Dictionary<Guid, JsDeletion> Deletions = [];
     private bool _isRunningGetAllFiles = false;
     private readonly CancellationToken _token;
 
@@ -192,7 +193,15 @@ public class ScriptContext
             await channel.Writer.WriteAsync($"[OK] {revision.GetDiff(file.MostRecentRevision)}");
         }
 
-        await fileRepo.ApplyMassEdit(author, revisionsForFiles, jobCode, massEditId, apply);
+        if (Deletions.Count > 0 && user.TrustLevel < TrustLevel.Moderator)
+            throw new UnauthorizedAccessException("You do not have permission to delete files.");
+
+        foreach (var keyValuePair in Deletions)
+        {
+            await channel.Writer.WriteAsync($"[OK] Deleting {keyValuePair.Key}");
+        }
+
+        await fileRepo.ApplyMassEdit(author, revisionsForFiles, Deletions, jobCode, massEditId, apply);
     }
 }
 
@@ -230,3 +239,4 @@ public static class ArrayExtensions {
 }
 
 public record QueuedUpdate(string TrackName, string? AlbumName, string[] ArtistNames, string? Description, string ChangeSummary);
+public record JsDeletion(bool AllowReupload, DeletionReason Reason);
