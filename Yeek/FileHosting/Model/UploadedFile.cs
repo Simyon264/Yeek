@@ -106,6 +106,13 @@ public class UploadedFile
         var id = string.Empty;
         if (includeId)
             id = $" ({GetShortId()})";
-        return $"{string.Join('_', sb)}{id}.mid";
+
+        var downloadName = $"{string.Join('_', sb)}{id}.mid";
+        var invalidCharacters = Path.GetInvalidFileNameChars()
+            .Concat(Path.GetInvalidPathChars())
+            .Concat(['\\', '/', ':', '*', '?', '"', '<', '>', '|'])
+            .ToHashSet();
+
+        return string.Concat(downloadName.Where(c => !invalidCharacters.Contains(c)));
     }
 }
