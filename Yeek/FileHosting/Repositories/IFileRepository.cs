@@ -72,6 +72,7 @@ public enum SearchMode
     Relevance = 1,
     Top = 2,
     Recent = 3,
+    Downloads = 4,
 }
 
 public class SummarizedRevision
