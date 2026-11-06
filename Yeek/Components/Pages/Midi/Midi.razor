@@ -497,6 +497,10 @@
 
         // This is all just to test if the given parameters we have actually ever would match to a url we generated
 
+        // if we only have the short id and nothing else, we return early.
+        if (Author == null && Album == null && TrackName == null)
+            return foundGuid;
+
         var ourUrlSb = new List<string>();
         ourUrlSb.Add(ShortId);
 

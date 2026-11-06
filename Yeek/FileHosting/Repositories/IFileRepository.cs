@@ -1,4 +1,5 @@
-﻿using Yeek.FileHosting.Model;
+﻿using Yeek.FileHosting.JavaScript;
+using Yeek.FileHosting.Model;
 using Yeek.Security.Model;
 
 namespace Yeek.FileHosting.Repositories;
@@ -29,7 +30,7 @@ public interface IFileRepository
     public Task<List<UploadedFile>> GetAllUploadedFilesAsync();
     public Task RevertMassEdit(Guid massEditId, Guid user);
     public Task<SummarizedRevision?> GetMassEditOrNull(Guid massEditId);
-    public Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, string script, Guid editId, bool apply);
+    public Task ApplyMassEdit(Guid user, Dictionary<Guid, FileRevision> revisions, Dictionary<Guid, JsDeletion> deletions, string script, Guid editId, bool apply);
 
     public Task<List<SummarizedRevision>> GetRevisionsAsync(Guid fileId);
     /// <summary>
